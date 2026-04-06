@@ -1,0 +1,389 @@
+import { supabase } from "./supabaseClient";
+
+// ==================== Auth ====================
+
+export async function loginTeam(teamId?: string | null, password?: string, rollNumber?: string | null) {
+  if (!password) throw new Error("Password is required");
+
+  if (teamId) {
+    const { data: team, error } = await supabase
+      .from("teams")
+      .select("*")
+      .eq("id", teamId)
+      .single();
+
+    if (error || !team) throw new Error("Team not found");
+    
+    if (team.password !== password) throw new Error("Invalid credentials");
+
+    return { session: { token: "supabase-m-session", teamId: team.id, teamName: team.name, isSolo: false, wantsMatchup: team.wants_matchup } };
+  }
+
+  // Then check Participants (for soloists)
+  if (rollNumber) {
+    const { data: p, error } = await supabase
+      .from("participants")
+      .select("*, teams(*)")
+      .eq("roll_number", rollNumber.toUpperCase())
+      .single();
+
+    if (error || !p) throw new Error("Participant not found");
+    if (p.password !== password) throw new Error("Invalid credentials");
+
+    return { 
+      session: { 
+        token: "supabase-m-session", 
+        participantId: p.id,
+        teamId: p.team_id, 
+        teamName: (p.teams as any)?.name || p.name, 
+        isSolo: !p.team_id, 
+        wantsMatchup: (p.teams as any)?.wants_matchup || false,
+        rollNumber: p.roll_number,
+        participantName: p.name
+      } 
+    };
+  }
+
+  throw new Error("Invalid credentials");
+}
+
+export async function registerTeam(teamId: string, teamName: string, password: string, email: string, isSolo: boolean = false, wantsMatchup: boolean = false, members: any[] = []) {
+  if (isSolo) {
+    const solo = members[0];
+    const { error } = await supabase.from("participants").insert({
+      name: solo.name,
+      email,
+      password,
+      year: solo.year,
+      roll_number: solo.rollNumber.toUpperCase(),
+      team_id: null
+    });
+    if (error) throw new Error(error.message);
+  } else {
+    const { error: teamErr } = await supabase.from("teams").insert({
+      id: teamId,
+      name: teamName,
+      password,
+      is_solo: false,
+      wants_matchup: !!wantsMatchup
+    });
+    if (teamErr) throw new Error(teamErr.message);
+
+    for (const m of members) {
+      const { error: partErr } = await supabase.from("participants").insert({
+        team_id: teamId,
+        name: m.name,
+        email,
+        password,
+        year: m.year,
+        roll_number: m.rollNumber.toUpperCase()
+      });
+      if (partErr) throw new Error(partErr.message);
+    }
+  }
+
+  return { message: "Registration successful", teamId: isSolo ? null : teamId };
+}
+
+
+export async function getMatchupPool(currentTeamId?: string) {
+  const { data: teams, error } = await supabase
+    .from("teams")
+    .select("*, participants(*)")
+    .eq("wants_matchup", true);
+
+  if (error) throw new Error(error.message);
+
+  return teams
+    .filter(t => t.participants.length < 3 && t.id !== currentTeamId)
+    .map(t => ({
+      ...t,
+      leaderName: t.participants[0]?.name || t.name,
+      currentSize: t.participants.length
+    }));
+}
+
+export async function joinMatchup(participantId: string, targetTeamId: string) {
+  const { data, error } = await supabase.rpc("join_matchup", { 
+    p_participant_id: participantId, 
+    p_target_team_id: targetTeamId 
+  });
+
+  if (error) throw new Error(error.message);
+
+  return { 
+    message: "Successfully joined team", 
+    session: {
+      token: "supabase-m-session",
+      teamId: data.teamId,
+      teamName: data.teamName,
+      isSolo: false,
+      wantsMatchup: true
+    }
+  };
+}
+
+// ==================== QR Scanning ====================
+
+export async function scanQRCode(teamId: string, stageNumber: number) {
+  const { error } = await supabase.rpc("scan_qr_code", { 
+    p_team_id: teamId, 
+    p_stage_number: stageNumber 
+  });
+
+  if (error) throw new Error(error.message);
+  return { message: "Scan successful" };
+}
+
+export async function getQRScans(teamId: string) {
+  const { data, error } = await supabase
+    .from("scans")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("scanned_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return { scans: data };
+}
+
+// ==================== Participants ====================
+
+export async function getParticipants(teamId: string) {
+  const { data, error } = await supabase
+    .from("participants")
+    .select("*")
+    .eq("team_id", teamId);
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function addParticipant(teamId: string, name: string, email: string, year: string, rollNumber: string) {
+  const { data, error } = await supabase
+    .from("participants")
+    .insert({ team_id: teamId, name, email, year, roll_number: rollNumber.toUpperCase() })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// ==================== Event Control ====================
+
+export async function getEventStatus() {
+  const { data: config, error } = await supabase.from("event_config").select("*");
+
+  if (error) throw new Error(error.message);
+  
+  const map = new Map(config.map(c => [c.key, c.value]));
+  
+  return { 
+    isStarted: map.get("isStarted") === "true",
+    registrationEnded: map.get("registrationEnded") === "true",
+    registrationDeadline: map.get("registrationDeadline") || null,
+    currentRound: parseInt((map.get("currentRound") as string) || "1")
+  };
+}
+
+export async function startEvent() {
+  const { error } = await supabase
+    .from("event_config")
+    .upsert({ key: "isStarted", value: "true" });
+
+  if (error) throw new Error(error.message);
+  return { message: "Event started" };
+}
+
+// ==================== Leaderboard ====================
+
+export async function getLeaderboard() {
+  const { data: teams, error } = await supabase
+    .from("teams")
+    .select(`
+      id, 
+      name, 
+      is_solo, 
+      scans(id),
+      games_completed(id)
+    `);
+
+  if (error) throw new Error(error.message);
+
+  const leaderboard = teams.map(t => ({
+    id: t.id,
+    name: t.name,
+    isSolo: t.is_solo,
+    scanCount: t.scans.length,
+    gamesCount: t.games_completed.length
+  })).sort((a, b) => (b.scanCount - a.scanCount) || (b.gamesCount - a.gamesCount));
+
+  return { leaderboard };
+}
+
+// ==================== Games ====================
+
+export async function markGameComplete(teamId: string, levelId: number, levelName: string) {
+  const { error } = await supabase.rpc("mark_game_complete", {
+    p_team_id: teamId,
+    p_level_id: levelId,
+    p_level_name: levelName
+  });
+
+  if (error) throw new Error(error.message);
+  return { message: "Game marked as complete" };
+}
+
+export async function getCompletedGames(teamId: string) {
+  const { data, error } = await supabase
+    .from("games_completed")
+    .select("*")
+    .eq("team_id", teamId);
+
+  if (error) throw new Error(error.message);
+  return { completed: data };
+}
+
+// ==================== Hero/Dashboard ====================
+
+export async function getTeamsStats() {
+  const { data: teams, error } = await supabase
+    .from("teams")
+    .select(`
+      id, name, is_solo,
+      scans(id),
+      games_completed(id),
+      participants(*)
+    `);
+
+  if (error) throw new Error(error.message);
+
+  const stats = teams.map(t => ({
+    id: t.id,
+    name: t.name,
+    isSolo: t.is_solo,
+    qr: {
+      scanned: t.scans.length,
+      total: 5,
+      completed: t.scans.length >= 5,
+    },
+    games: {
+      completed: t.games_completed.length,
+      total: 2,
+    },
+    participants: t.participants
+  }));
+
+  return { teams: stats };
+}
+
+export async function getTeamParticipants(teamId: string) {
+  return getParticipants(teamId);
+}
+
+export async function adminSeedSoloist(participantId: string, targetTeamId: string, adminPassword: string) {
+  if (adminPassword !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  
+  const { error } = await supabase
+    .from("participants")
+    .update({ team_id: targetTeamId })
+    .eq("id", participantId);
+
+  if (error) throw new Error(error.message);
+  return { message: "Seeding successful" };
+}
+
+export async function adminCreateTeam(teamName: string, password: string, adminPassword: string) {
+  if (adminPassword !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  
+  const teamId = `CEL-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+  const { data, error } = await supabase
+    .from("teams")
+    .insert({
+      id: teamId,
+      name: teamName,
+      password,
+      is_solo: false,
+      wants_matchup: true,
+      is_admin_created: true
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return { team: data };
+}
+
+export async function adminExportData(adminPassword: string) {
+  if (adminPassword !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  
+  const { data: teams, error: tErr } = await supabase.from("teams").select("*, participants(*)");
+  const { data: soloists, error: sErr } = await supabase.from("participants").select("*").is("team_id", null);
+
+  if (tErr || sErr) throw new Error("Export failed");
+  return { teams, unassignedParticipants: soloists };
+}
+
+export async function getEventConfig(password: string) {
+  if (password !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  const { data, error } = await supabase.from("event_config").select("*");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function updateEventConfig(key: string, value: string, adminPassword: string) {
+  if (adminPassword !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  const { error } = await supabase.from("event_config").upsert({ key, value });
+  if (error) throw new Error(error.message);
+  return { message: `Config ${key} updated` };
+}
+
+export async function getEventCounters() {
+  const { count: teamsCount, error: tErr } = await supabase.from("teams").select("*", { count: "exact", head: true });
+  const { count: participantsCount, error: pErr } = await supabase.from("participants").select("*", { count: "exact", head: true });
+
+  if (tErr || pErr) throw new Error("Failed to fetch counters");
+  return { teams: teamsCount, participants: participantsCount };
+}
+
+export async function syncSession(teamId?: string, rollNumber?: string) {
+  if (rollNumber) {
+    const { data: p, error } = await supabase
+      .from("participants")
+      .select("*, teams(*)")
+      .eq("roll_number", rollNumber)
+      .single();
+    if (error || !p) throw new Error("Sync failed");
+    return { 
+      participantId: p.id, 
+      teamId: p.team_id, 
+      teamName: (p.teams as any)?.name || p.name, 
+      isSolo: !p.team_id, 
+      wantsMatchup: (p.teams as any)?.wants_matchup || false 
+    };
+  } else if (teamId) {
+    const { data: team, error } = await supabase
+      .from("teams")
+      .select("*")
+      .eq("id", teamId)
+      .single();
+    if (error || !team) throw new Error("Sync failed");
+    return { 
+      teamId: team.id, 
+      teamName: team.name, 
+      isSolo: false, 
+      wantsMatchup: team.wants_matchup 
+    };
+  }
+  throw new Error("Sync failed");
+}
+
+export async function getAdminData(password: string) {
+  if (password !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  const { data: soloists, error: sErr } = await supabase.from("participants").select("*").is("team_id", null);
+  const { data: teams, error: tErr } = await supabase.from("teams").select("*, participants(*)").eq("wants_matchup", true);
+  
+  if (sErr || tErr) throw new Error("Failed to fetch admin data");
+  return { soloists, teamsWithSpace: teams.filter(t => t.participants.length < 3) };
+}
+
