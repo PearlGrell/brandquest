@@ -56,6 +56,8 @@ const Admin = () => {
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamPass, setNewTeamPass] = useState("12345678");
   const [creating, setCreating] = useState(false);
+  const [soloSearch, setSoloSearch] = useState("");
+  const [teamSearch, setTeamSearch] = useState("");
 
   const isAuth = password === ADMIN_PASSWORD;
 
@@ -449,13 +451,28 @@ const Admin = () => {
 
                 {/* Soloists Column */}
                 <div className="lg:col-span-1 space-y-4">
-                  <h3 className="font-display text-lg font-bold flex items-center gap-2 px-2">
-                    <UserPlus className="w-5 h-5 text-secondary" />
-                    Soloists
-                    <span className="text-[10px] font-mono bg-secondary/10 text-secondary px-2 py-0.5 rounded-full ml-auto">{soloists.length}</span>
-                  </h3>
+                  <div className="space-y-4 px-2">
+                    <h3 className="font-display text-lg font-bold flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-secondary" />
+                      Soloists
+                      <span className="text-[10px] font-mono bg-secondary/10 text-secondary px-2 py-0.5 rounded-full ml-auto">{soloists.length}</span>
+                    </h3>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+                      <input
+                        type="text"
+                        placeholder="Search soloists..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs font-mono focus:border-secondary/50 outline-none transition-all"
+                        value={soloSearch}
+                        onChange={(e) => setSoloSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                    {soloists.map(s => (
+                    {soloists.filter(s => 
+                      s.name.toLowerCase().includes(soloSearch.toLowerCase()) || 
+                      s.rollNumber.toLowerCase().includes(soloSearch.toLowerCase())
+                    ).map(s => (
                       <button
                         key={s.id}
                         onClick={() => setSelectedSoloist(selectedSoloist === s.id ? null : s.id)}
@@ -479,13 +496,27 @@ const Admin = () => {
 
                 {/* Target Teams Column */}
                 <div className="lg:col-span-1 space-y-4">
-                  <h3 className="font-display text-lg font-bold flex items-center gap-2 px-2">
-                    <Users className="w-5 h-5 text-primary" />
-                    Target Teams
-                    <span className="text-[10px] font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-auto">{teams.length}</span>
-                  </h3>
+                  <div className="space-y-4 px-2">
+                    <h3 className="font-display text-lg font-bold flex items-center gap-2">
+                      <Users className="w-5 h-5 text-primary" />
+                      Target Teams
+                      <span className="text-[10px] font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-auto">{teams.length}</span>
+                    </h3>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+                      <input
+                        type="text"
+                        placeholder="Search teams..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs font-mono focus:border-primary/50 outline-none transition-all"
+                        value={teamSearch}
+                        onChange={(e) => setTeamSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                    {teams.map(t => (
+                    {teams.filter(t => 
+                      t.name.toLowerCase().includes(teamSearch.toLowerCase())
+                    ).map(t => (
                       <div
                         key={t.id}
                         className={`p-4 rounded-xl border bg-white/5 border-white/5 flex items-center justify-between transition-all group ${!selectedSoloist ? "opacity-40 grayscale pointer-events-none" : "hover:border-primary/30"
