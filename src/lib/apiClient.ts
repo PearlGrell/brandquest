@@ -19,7 +19,6 @@ export async function loginTeam(teamId?: string | null, password?: string, rollN
     return { session: { token: "supabase-m-session", teamId: team.id, teamName: team.name, isSolo: false, wantsMatchup: team.wants_matchup } };
   }
 
-  // Then check Participants (for soloists)
   if (rollNumber) {
     const { data: p, error } = await supabase
       .from("participants")
@@ -35,9 +34,9 @@ export async function loginTeam(teamId?: string | null, password?: string, rollN
         token: "supabase-m-session", 
         participantId: p.id,
         teamId: p.team_id, 
-        teamName: (p.teams as any)?.name || p.name, 
+        teamName: (p.teams)?.name || p.name, 
         isSolo: !p.team_id, 
-        wantsMatchup: (p.teams as any)?.wants_matchup || false,
+        wantsMatchup: (p.teams)?.wants_matchup || false,
         rollNumber: p.roll_number,
         participantName: p.name
       } 
@@ -47,9 +46,18 @@ export async function loginTeam(teamId?: string | null, password?: string, rollN
   throw new Error("Invalid credentials");
 }
 
-export async function registerTeam(teamId: string, teamName: string, password: string, email: string, isSolo: boolean = false, wantsMatchup: boolean = false, members: any[] = []) {
+export async function registerTeam(teamId: string, teamName: string, password: string, email: string, isSolo: boolean = false, wantsMatchup: boolean = false, members = []) {
   if (isSolo) {
     const solo = members[0];
+    
+    const { data: existingParticipant } = await supabase
+      .from("participants")
+      .select("*")
+      .eq("roll_number", solo.rollNumber.toUpperCase())
+      .single();
+    
+    if (existingParticipant) throw new Error("A participant with this roll number is already registered");
+    
     const { error } = await supabase.from("participants").insert({
       name: solo.name,
       email,
@@ -60,6 +68,24 @@ export async function registerTeam(teamId: string, teamName: string, password: s
     });
     if (error) throw new Error(error.message);
   } else {
+    const { data: existingTeam } = await supabase
+      .from("teams")
+      .select("*")
+      .ilike("name", teamName)
+      .single();
+    
+    if (existingTeam) throw new Error("A team with this name is already registered. Please choose a different team name");
+    
+    for (const m of members) {
+      const { data: existingParticipant } = await supabase
+        .from("participants")
+        .select("*")
+        .eq("roll_number", m.rollNumber.toUpperCase())
+        .single();
+      
+      if (existingParticipant) throw new Error(`The roll number "${m.rollNumber}" is already registered`);
+    }
+    
     const { error: teamErr } = await supabase.from("teams").insert({
       id: teamId,
       name: teamName,
@@ -357,9 +383,9 @@ export async function syncSession(teamId?: string, rollNumber?: string) {
     return { 
       participantId: p.id, 
       teamId: p.team_id, 
-      teamName: (p.teams as any)?.name || p.name, 
+      teamName: (p.teams)?.name || p.name, 
       isSolo: !p.team_id, 
-      wantsMatchup: (p.teams as any)?.wants_matchup || false 
+      wantsMatchup: (p.teams)?.wants_matchup || false 
     };
   } else if (teamId) {
     const { data: team, error } = await supabase

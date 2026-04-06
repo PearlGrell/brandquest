@@ -27,13 +27,18 @@ const FloatingInput = ({ label, ...props }: { label: string } & React.InputHTMLA
 );
 
 const FloatingSelect = ({ label, children, ...props }: { label: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <div className="relative">
+  <div className="relative group">
     <select
       {...props}
-      className="w-full bg-transparent border-b border-border/30 px-1 py-3 font-mono text-sm text-foreground focus:outline-none focus:border-primary/60 transition-all duration-300 appearance-none cursor-pointer"
+      className="floating-select w-full bg-background/60 border-b border-border/30 px-1 py-3 font-mono text-sm text-foreground focus:outline-none focus:border-primary/70 transition-all duration-300 appearance-none cursor-pointer pr-7 peer"
     >
       {children}
     </select>
+    <div className="absolute right-0 top-3 text-muted-foreground/70 peer-focus:text-primary transition-colors pointer-events-none">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 9l6 6 6-6" />
+      </svg>
+    </div>
     <label className="absolute left-1 -top-2 text-[10px] font-mono text-muted-foreground/50 pointer-events-none">
       {label}
     </label>
@@ -100,6 +105,14 @@ const Register = () => {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const validateField = (fieldValue: string, fieldType: 'name' | 'rollNumber'): boolean => {
+    if (fieldType === 'name') {
+      return /[a-zA-Z\s]/.test(fieldValue) && !/^\d+$/.test(fieldValue);
+    } else {
+      return /[a-zA-Z0-9]/.test(fieldValue) && fieldValue.length > 0;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -111,10 +124,20 @@ const Register = () => {
     if (!email.trim() || !email.includes("@")) errs.push("Valid email required");
 
     members.forEach((m, i) => {
-      if (!m.name.trim()) errs.push(`${isSolo ? "Soloist" : "Member " + (i + 1)}: Name required`);
-      if (!m.rollNumber.trim()) errs.push(`${isSolo ? "Soloist" : "Member " + (i + 1)}: Roll number required`);
-      if (!m.year) errs.push(`${isSolo ? "Soloist" : "Member " + (i + 1)}: Year required`);
+      const member = isSolo ? "Soloist" : "Member " + (i + 1);
+      
+      if (!m.name.trim()) errs.push(`${member}: Name required`);
+      else if (!validateField(m.name, 'name')) errs.push(`${member}: Name must contain letters, not just numbers`);
+      
+      if (!m.rollNumber.trim()) errs.push(`${member}: Roll number required`);
+      else if (!validateField(m.rollNumber, 'rollNumber')) errs.push(`${member}: Roll number must contain alphanumeric characters`);
+      
+      if (!m.year) errs.push(`${member}: Year required`);
     });
+
+    if (!isSolo && teamName.trim() && !validateField(teamName, 'name')) {
+      errs.push("Team name must contain letters, not just numbers");
+    }
 
     if (password.length < 4) errs.push("Password must be at least 4 characters");
 
@@ -131,7 +154,7 @@ const Register = () => {
 
       setResult({ id: isSolo ? members[0].rollNumber.toUpperCase() : id, password, isSolo });
       setErrors([]);
-    } catch (err: any) {
+    } catch (err) {
       setErrors([err.message || "An unexpected error occurred"]);
     } finally {
       setIsSubmitting(false);

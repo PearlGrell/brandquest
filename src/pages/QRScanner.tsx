@@ -44,7 +44,7 @@ const QRScanner = () => {
 
   const loadScans = useCallback(async (tid: string) => {
     try {
-      const data = await getQRScans(tid);
+      const data = await getQRScans(tid) as { scans: ScanHistory[]; completion?: { brandName: string; completedAt: string } };
       setScans(data.scans || []);
       if (data.completion) {
         setBrandName(data.completion.brandName);
@@ -89,7 +89,7 @@ const QRScanner = () => {
       setError("");
       try {
         const response = await scanQRCode(teamId, stageNumber);
-        const { scan } = response;
+        const { scan } = response as unknown as { scan: { stageNumber: number; randomDigit: string; clue: string; nextLocation: string | null } };
 
         const newScan: ScanHistory = {
           stageNumber: scan.stageNumber,

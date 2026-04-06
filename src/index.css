@@ -178,6 +178,15 @@
   }
 }
 
+.floating-select option {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.floating-select option[value=""] {
+  color: hsl(var(--muted-foreground));
+}
+
 /* Shooting star animation */
 @keyframes shooting-star {
   0% { transform: translateX(0) translateY(0); opacity: 1; }

@@ -73,7 +73,7 @@ const Admin = () => {
   const loadConfig = async () => {
     try {
       const config = await getEventConfig(ADMIN_PASSWORD);
-      const map = new Map(config.map((c: any) => [c.key, c.value]));
+      const map = new Map(config.map((c) => [c.key, c.value]));
       setIsStarted(map.get("isStarted") === "true");
       setRegEnded(map.get("registrationEnded") === "true");
       setDeadline((map.get("registrationDeadline") || "") as string);
@@ -107,7 +107,7 @@ const Admin = () => {
       setTeams(data.teamsWithSpace || []);
       setStats(counts);
       setError(null);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message || "Failed to load admin data");
     } finally {
       setLoading(false);
@@ -120,7 +120,7 @@ const Admin = () => {
       await updateEventConfig(key, value, ADMIN_PASSWORD);
       toast({ title: "Config Updated", description: `${key} is now ${value}` });
       loadConfig();
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
     } finally {
       setUpdatingConfig(null);
@@ -134,7 +134,7 @@ const Admin = () => {
       await updateEventConfig(`qr_stage_${stage.stageNumber}`, value, ADMIN_PASSWORD);
       toast({ title: "Stage Updated", description: `Location ${stage.stageNumber} synced.` });
       loadConfig();
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
     } finally {
       setUpdatingConfig(null);
@@ -151,7 +151,7 @@ const Admin = () => {
       setNewTeamPass("12345678");
       toast({ title: "Team Created", description: "Placeholder team is ready for seeding." });
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: "Creation Failed", description: err.message, variant: "destructive" });
     } finally {
       setCreating(false);
@@ -164,12 +164,12 @@ const Admin = () => {
       const csvRows = [];
       csvRows.push("Team ID,Team Name,Source,Member Name,Roll Number,Email");
 
-      data.teams.forEach((t: any) => {
+      data.teams.forEach((t) => {
         const source = t.isAdminCreated ? "Admin" : "Participant";
         if (t.participants.length === 0) {
           csvRows.push(`${t.id},${t.name},${source},EMPTY,N/A,N/A`);
         } else {
-          t.participants.forEach((p: any) => {
+          t.participants.forEach((p) => {
             csvRows.push(`${t.id},${t.name},${source},"${p.name}",${p.rollNumber},${p.email}`);
           });
         }
@@ -199,7 +199,7 @@ const Admin = () => {
       toast({ title: "Assignment Successful", description: "Participant moved to the team." });
       setSelectedSoloist(null);
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: "Assignment Failed", description: err.message, variant: "destructive" });
     } finally {
       setSeeding(null);
@@ -379,7 +379,7 @@ const Admin = () => {
                   <button
                     onClick={() => handleUpdateConfig("registrationDeadline", deadline)}
                     disabled={updatingConfig === "registrationDeadline"}
-                    className="w-full py-3 bg-white/5 border border-white/10 rounded-xl font-display font-black text-sm text-foreground hover:bg-white/10 transition-all font-mono tracking-widest"
+                    className="w-full py-3 bg-white/5 border border-white/10 rounded-xl font-display font-black text-sm text-foreground hover:bg-white/10 transition-all tracking-widest"
                   >
                     {updatingConfig === "registrationDeadline" ? "SYNCING..." : "SYNC DEADLINE"}
                   </button>
