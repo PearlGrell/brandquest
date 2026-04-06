@@ -226,7 +226,7 @@ const Dashboard = () => {
                 {[
                   { name: "QR Quest", round: 1 },
                   { name: "Brand Forge", round: 2 },
-                  { name: "Showcase", round: 3 }
+                  { name: "Cosminc Code Challenge", round: 3 }
                 ].map((s, i) => {
                   const isActive = eventStarted && currentRound === s.round;
                   const isCompleted = eventStarted && currentRound > s.round;
