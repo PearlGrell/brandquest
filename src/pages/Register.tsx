@@ -116,6 +116,20 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    // Re-check status at submit time so an already-open form cannot bypass cutoff.
+    try {
+      const latestStatus = await getEventStatus();
+      if (latestStatus.registrationEnded) {
+        setRegistrationEnded(true);
+        setErrors(["Registration has closed. New entries are no longer accepted."]);
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (statusError) {
+      console.error("Failed to validate registration status:", statusError);
+    }
+
     const errs: string[] = [];
 
     const effectiveTeamName = isSolo ? members[0].name : teamName;

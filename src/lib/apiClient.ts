@@ -197,17 +197,51 @@ export async function addParticipant(teamId: string, name: string, email: string
 
 // ==================== Event Control ====================
 
+function parseRegistrationDeadline(deadlineRaw: string): Date | null {
+  // Treat `datetime-local` values as local time (not UTC/GMT).
+  const localMatch = deadlineRaw.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+
+  if (localMatch) {
+    const [, y, m, d, h, min, s = "0"] = localMatch;
+    const localDate = new Date(
+      Number(y),
+      Number(m) - 1,
+      Number(d),
+      Number(h),
+      Number(min),
+      Number(s)
+    );
+    return Number.isNaN(localDate.getTime()) ? null : localDate;
+  }
+
+  // If timezone exists in the value (e.g. `Z` or `+05:30`), honor it.
+  const parsed = new Date(deadlineRaw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export async function getEventStatus() {
   const { data: config, error } = await supabase.from("event_config").select("*");
 
   if (error) throw new Error(error.message);
   
   const map = new Map(config.map(c => [c.key, c.value]));
+  const deadlineRaw = map.get("registrationDeadline") || null;
+  const endedManually = map.get("registrationEnded") === "true";
+
+  let endedByDeadline = false;
+  if (deadlineRaw) {
+    const deadline = parseRegistrationDeadline(deadlineRaw);
+    if (deadline) {
+      endedByDeadline = Date.now() >= deadline.getTime();
+    }
+  }
   
   return { 
     isStarted: map.get("isStarted") === "true",
-    registrationEnded: map.get("registrationEnded") === "true",
-    registrationDeadline: map.get("registrationDeadline") || null,
+    registrationEnded: endedManually || endedByDeadline,
+    registrationDeadline: deadlineRaw,
     currentRound: parseInt((map.get("currentRound") as string) || "1")
   };
 }
