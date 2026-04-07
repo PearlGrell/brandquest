@@ -82,7 +82,7 @@ const Dashboard = () => {
 
           setQrProgress({ scanned: qr.scans.length, total: 5 });
           setGamesProgress({ completed: games.completed.length, total: 3 });
-          setCompletedLevels(games.completed.map((c: any) => c.level_id));
+          setCompletedLevels(games.completed.map((c) => c.level_id));
           setEventStarted(event.isStarted);
           setRegistrationEnded(event.registrationEnded);
           setCurrentRound(event.currentRound || 1);
@@ -176,14 +176,14 @@ const Dashboard = () => {
               >
                 <ExternalLink className="w-4 h-4" /> Leaderboard
               </Link>
-              {team?.isSolo && (
+              {/**{team?.isSolo && (
                 <Link
                   to="/matchup"
                   className="flex items-center gap-2 px-6 py-3 border border-secondary/30 rounded-xl font-display text-sm font-bold text-secondary hover:border-secondary/60 hover:text-secondary transition-all"
                 >
                   <Users className="w-4 h-4" /> Find Team
                 </Link>
-              )}
+              )}**/}
             </div>
 
             {/* Stats row */}
