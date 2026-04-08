@@ -35,7 +35,7 @@ const QRScanner = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraPermission, setCameraPermission] = useState<"granted" | "denied" | "pending">("pending");
-  const [lastScannedClue, setLastScannedClue] = useState<{ clue: string; nextLocation: string | null } | null>(null);
+  const [lastScannedClue, setLastScannedClue] = useState<{ nextClue: string; discoveredLocation: string | null } | null>(null);
   const [eventStarted, setEventStarted] = useState(false);
   const [loading, setLoading] = useState(true);
   const lastScannedRef = useRef<string>("");
@@ -49,6 +49,11 @@ const QRScanner = () => {
       if (data.completion) {
         setBrandName(data.completion.brandName);
         setCompletionTime(data.completion.completedAt);
+      } else {
+        const savedClue = localStorage.getItem(`last_clue_${tid}`);
+        if (savedClue) {
+          setLastScannedClue(JSON.parse(savedClue));
+        }
       }
     } catch (err) {
       console.error("Failed to load scans:", err);
@@ -89,30 +94,37 @@ const QRScanner = () => {
       setError("");
       try {
         const response = await scanQRCode(teamId, stageNumber);
-        const { scan } = response as unknown as { scan: { stageNumber: number; randomDigit: string; clue: string; nextLocation: string | null } };
+        const { scan, brandName: finalBrand } = response as unknown as { 
+          scan: { stageNumber: number; randomDigit: string | null; clue: string; nextClue: string; locationName: string | null; brandName?: string }; 
+          brandName?: string 
+        };
 
         const newScan: ScanHistory = {
           stageNumber: scan.stageNumber,
-          randomDigit: scan.randomDigit,
+          randomDigit: scan.randomDigit || "-",
           clue: scan.clue,
           scannedAt: new Date().toISOString(),
         };
 
         setScans((prev) => [...prev, newScan]);
-        setLastScannedClue({
-          clue: scan.clue,
-          nextLocation: scan.nextLocation,
-        });
+        const newClue = {
+          nextClue: scan.nextClue,
+          discoveredLocation: scan.locationName,
+        };
+        setLastScannedClue(newClue);
+        localStorage.setItem(`last_clue_${teamId}`, JSON.stringify(newClue));
+
+        if (scan.brandName) {
+           setBrandName(scan.brandName);
+           setCompletionTime(new Date().toLocaleTimeString());
+        }
 
         const successMsg = stageNumber === 0
           ? "✨ Starting Point scanned! Follow the clue to your first challenge."
-          : `✨ Stage ${stageNumber} unlocked! Random digit: ${scan.randomDigit}`;
+          : `✨ Stage ${stageNumber} unlocked! ${scan.randomDigit ? `Random digit: ${scan.randomDigit}` : ""}`;
 
         setSuccess(successMsg);
-
-
         setTimeout(() => setSuccess(""), 5000);
-
 
         if (scans.length >= QR_STAGES - 1) {
           loadScans(teamId);
@@ -145,18 +157,26 @@ const QRScanner = () => {
 
 
 
+      // Smart ID extraction
       let stageNumber = parseInt(qrData);
 
+      // Handle full URLs like ...?stage=1
+      if (isNaN(stageNumber) && qrData.includes("stage=")) {
+        const urlObj = new URL(qrData.startsWith('http') ? qrData : `http://dummy.com/${qrData}`);
+        stageNumber = parseInt(urlObj.searchParams.get("stage") || "");
+      }
 
+      // Fallback for old colon-based IDs
       if (isNaN(stageNumber) && qrData.includes(":")) {
         const parts = qrData.split(":");
         stageNumber = parseInt(parts[parts.length - 1]);
       }
 
       if (isNaN(stageNumber) || stageNumber < 0 || stageNumber > 4) {
-        setError(`Invalid QR code. Expected stage 0-4, got: ${qrData}`);
+        setError(`Invalid Identifier. Expected stage 0-4 or a valid URL. Received: ${qrData}`);
         return;
       }
+
 
 
       if (scans.some((s) => s.stageNumber === stageNumber)) {
@@ -240,6 +260,7 @@ const QRScanner = () => {
     if (teamId) {
       localStorage.removeItem(`qr_scans_${teamId}`);
       localStorage.removeItem(`qr_brand_${teamId}`);
+      localStorage.removeItem(`last_clue_${teamId}`);
     }
     setScans([]);
     setBrandName("");
@@ -353,38 +374,38 @@ const QRScanner = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              {/* Clue */}
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="w-5 h-5 text-accent" />
-                  <h3 className="font-display font-bold text-lg">Your Clue</h3>
-                </div>
-                <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
-                  <p className="font-mono text-sm text-muted-foreground/70">
-                    {lastScannedClue.clue}
-                  </p>
-                </div>
-              </div>
-
-              {/* Next Location */}
-              {lastScannedClue.nextLocation && (
-                <div>
+              {/* Discovered Location */}
+              {lastScannedClue.discoveredLocation && (
+                <div className="mb-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <MapPin className="w-5 h-5 text-primary" />
-                    <h3 className="font-display font-bold text-lg">Next Stop</h3>
+                    <Check className="w-5 h-5 text-primary" />
+                    <h3 className="font-display font-bold text-lg">Location Discovered</h3>
                   </div>
                   <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                    <p className="font-display text-xl font-bold cosmic-gradient-text">
-                      {lastScannedClue.nextLocation}
+                    <p className="font-display text-xl font-bold cosmic-gradient-text uppercase tracking-tight">
+                      {lastScannedClue.discoveredLocation}
                     </p>
                   </div>
                 </div>
               )}
+
+              {/* Next Clue */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="w-5 h-5 text-accent" />
+                  <h3 className="font-display font-bold text-lg">Your Next Clue</h3>
+                </div>
+                <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
+                  <p className="font-mono text-sm text-muted-foreground/70 italic">
+                    "{lastScannedClue.nextClue}"
+                  </p>
+                </div>
+              </div>
             </motion.div>
           )}
 
           {/* Completion Card */}
-          {scans.length === QR_STAGES && brandName && (
+          {scans.length === QR_STAGES && (
             <motion.div
               className="p-8 rounded-2xl cosmic-gradient/10 border border-primary/30 mb-10 text-center"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -400,26 +421,27 @@ const QRScanner = () => {
               </motion.div>
               <h3 className="font-display text-2xl font-black mb-3">Round 1 Complete!</h3>
               <p className="font-mono text-muted-foreground/70 mb-4">
-                Your collected digits: <span className="text-primary font-bold">{scans.map((s) => s.randomDigit).join("")}</span>
+                Your collected digits: <span className="text-primary font-bold">{scans.filter(s => s.stageNumber !== 0).map((s) => s.randomDigit).join("")}</span>
               </p>
               <div className="bg-muted/10 p-4 rounded-xl border border-accent/20 mb-6">
                 <p className="text-sm text-muted-foreground/60 mb-1">Assigned Brand Name</p>
-                <p className="font-display text-3xl font-black cosmic-gradient-text">
-                  {brandName}
+                <p className={`font-display text-3xl font-black ${brandName ? 'cosmic-gradient-text' : 'text-muted-foreground'}`}>
+                  {brandName || "NO BRAND ASSIGNED"}
                 </p>
+                {!brandName && <p className="text-[10px] uppercase text-destructive mt-2">Error: Brand Pool Empty!</p>}
               </div>
               <p className="font-mono text-sm text-muted-foreground/50">
-                Completed at: {completionTime}
+                Completed at: {completionTime || new Date().toLocaleTimeString()}
               </p>
             </motion.div>
           )}
 
           {/* Camera Feed */}
           {scans.length < QR_STAGES && (
-            <>
+            <div className="space-y-8">
               {!eventStarted && !loading && (
                 <motion.div
-                  className="p-8 rounded-2xl border border-destructive/30 bg-destructive/5 mb-10"
+                  className="p-8 rounded-2xl border border-destructive/30 bg-destructive/5"
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
@@ -436,7 +458,7 @@ const QRScanner = () => {
               )}
 
               <motion.div
-                className="rounded-2xl border border-accent/20 bg-muted/5 backdrop-blur-sm mb-10 overflow-hidden"
+                className="rounded-2xl border border-accent/20 bg-muted/5 backdrop-blur-sm overflow-hidden"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
@@ -511,7 +533,7 @@ const QRScanner = () => {
                   </div>
                 )}
 
-                {/* Error/Success Messages */}
+                {/* Status Messages */}
                 {error && (
                   <motion.div
                     className="p-4 bg-destructive/10 border-t border-destructive/30 text-destructive text-sm font-mono"
@@ -532,14 +554,53 @@ const QRScanner = () => {
                   </motion.div>
                 )}
               </motion.div>
-            </>
+
+              {/* DEBUG TOOLS (PC TESTING) */}
+              <div className="mt-4">
+                <details className="group">
+                  <summary className="list-none cursor-pointer text-[10px] font-mono text-primary/30 hover:text-primary transition-colors text-center uppercase tracking-widest outline-none">
+                    [ Open Debug Terminal ]
+                  </summary>
+                  <div className="mt-4 p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
+                    <p className="text-[10px] font-mono text-muted-foreground/40 mb-3 uppercase tracking-tighter text-left">Internal Scan Override</p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Paste Admin URL or Stage ID..." 
+                        id="debug-scan-input"
+                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:border-primary/50 outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = (e.target as HTMLInputElement).value;
+                            handleQRDetected({ data: val } as any);
+                            (e.target as HTMLInputElement).value = "";
+                          }
+                        }}
+                      />
+                      <button 
+                        onClick={() => {
+                          const input = document.getElementById('debug-scan-input') as HTMLInputElement;
+                          if (input.value) {
+                            handleQRDetected({ data: input.value } as any);
+                            input.value = "";
+                          }
+                        }}
+                        className="px-4 bg-primary text-primary-foreground rounded-lg font-display font-bold text-[10px]"
+                      >
+                        EXEC
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
           )}
 
           {/* Reset button */}
           {scans.length > 0 && (
             <motion.button
               onClick={resetScans}
-              className="w-full py-3 rounded-lg border border-border/30 font-mono text-sm text-muted-foreground hover:bg-muted/10 transition-all"
+              className="w-full mt-10 py-3 rounded-lg border border-border/30 font-mono text-sm text-muted-foreground hover:bg-muted/10 transition-all"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}

@@ -14,7 +14,9 @@ import Matchup from "./pages/Matchup.tsx";
 import About from "./pages/About.tsx";
 import Admin from "./pages/Admin.tsx";
 import NotFound from "./pages/NotFound.tsx";
-
+import Round2Submission from "./pages/Round2Submission.tsx";
+import Round3Submission from "./pages/Round3Submission.tsx";
+import Rounds from "./pages/Rounds.tsx";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -29,11 +31,14 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/rounds" element={<Rounds />} />
           <Route path="/qr-scanner" element={<QRScanner />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/matchup" element={<Matchup />} />
           <Route path="/about" element={<About />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/submit/round-2" element={<Round2Submission />} />
+          <Route path="/submit/round-3" element={<Round3Submission />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

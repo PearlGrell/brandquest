@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import StarField from "@/components/StarField";
 import Navbar from "@/components/Navbar";
 import { Shield, Users, UserPlus, Search, Loader2, AlertCircle, Check, ArrowRight, Download, Plus, Zap, Timer, Power, RefreshCw, Radio, MapPin, List, Settings, Eye } from "lucide-react";
-import { getAdminData, adminSeedSoloist, adminCreateTeam, adminExportData, getEventConfig, updateEventConfig, getEventCounters } from "@/lib/apiClient";
+import { getAdminData, adminSeedSoloist, adminCreateTeam, adminExportData, getEventConfig, updateEventConfig, getEventCounters, getLeaderboard, adminGetSubmissions } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QRCodeSVG } from "qrcode.react";
@@ -12,7 +12,7 @@ import { QRCodeSVG } from "qrcode.react";
 interface AdminParticipant {
   id: string;
   name: string;
-  rollNumber: string;
+  roll_number: string;
 }
 
 interface AdminTeam {
@@ -52,6 +52,11 @@ const Admin = () => {
   const [qrStages, setQrStages] = useState<QRStage[]>([]);
   const [updatingConfig, setUpdatingConfig] = useState<string | null>(null);
 
+  const [r2Open, setR2Open] = useState(false);
+  const [r2Deadline, setR2Deadline] = useState("");
+  const [r3Open, setR3Open] = useState(false);
+  const [r3Deadline, setR3Deadline] = useState("");
+
 
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamPass, setNewTeamPass] = useState("12345678");
@@ -78,9 +83,14 @@ const Admin = () => {
       setRegEnded(map.get("registrationEnded") === "true");
       setDeadline((map.get("registrationDeadline") || "") as string);
       setCurrentRound(parseInt((map.get("currentRound") as string) || "1"));
+      
+      setR2Open(map.get("r2_open") === "true");
+      setR2Deadline((map.get("r2_deadline") || "") as string);
+      setR3Open(map.get("r3_open") === "true");
+      setR3Deadline((map.get("r3_deadline") || "") as string);
 
       const stages: QRStage[] = [];
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 0; i <= 4; i++) {
         const val = map.get(`qr_stage_${i}`) as string;
         if (val) {
           try {
@@ -158,35 +168,93 @@ const Admin = () => {
     }
   };
 
-  const handleExport = async () => {
-    try {
-      const data = await adminExportData(ADMIN_PASSWORD);
-      const csvRows = [];
-      csvRows.push("Team ID,Team Name,Source,Member Name,Roll Number,Email");
-
-      data.teams.forEach((t) => {
-        const source = t.isAdminCreated ? "Admin" : "Participant";
-        if (t.participants.length === 0) {
-          csvRows.push(`${t.id},${t.name},${source},EMPTY,N/A,N/A`);
-        } else {
-          t.participants.forEach((p) => {
-            csvRows.push(`${t.id},${t.name},${source},"${p.name}",${p.rollNumber},${p.email}`);
-          });
-        }
-      });
-
-      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const downloadExcel = (htmlData: string, filename: string) => {
+      const blob = new Blob([htmlData], { type: "application/vnd.ms-excel" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.setAttribute("hidden", "");
-      a.setAttribute("href", url);
-      a.setAttribute("download", `Celestio_Allotments_${new Date().toLocaleDateString()}.csv`);
+      a.href = url;
+      a.download = `${filename}_${new Date().toLocaleDateString()}.xls`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+  };
+
+  const handleExportAllocations = async () => {
+    try {
+      const data = await adminExportData(ADMIN_PASSWORD);
+      
+      let maxMembers = 0;
+      data.teams.forEach((t: any) => {
+        if (t.participants.length > maxMembers) maxMembers = t.participants.length;
+      });
+
+      let html = `<table border="1"><tr><th>Team ID</th><th>Team Name</th><th>Source</th>`;
+      for (let i = 1; i <= maxMembers; i++) {
+        html += `<th>Member ${i} Name</th><th>Member ${i} Roll</th><th>Member ${i} Email</th>`;
+      }
+      html += `</tr>`;
+
+      data.teams.forEach((t: any) => {
+        const source = t.isAdminCreated ? "Admin" : "Participant";
+        const color = t.isAdminCreated ? "background-color: #e0e7ff; color: #3730a3;" : "";
+        
+        html += `<tr style="${color}"><td>${t.id}</td><td>${t.name}</td><td>${source}</td>`;
+        
+        for(let i = 0; i < maxMembers; i++) {
+          if (i < t.participants.length) {
+             const p = t.participants[i];
+             html += `<td>${p.name || ""}</td><td>${p.roll_number || ""}</td><td>${p.email || ""}</td>`;
+          } else {
+             html += `<td></td><td></td><td></td>`;
+          }
+        }
+        html += `</tr>`;
+      });
+      html += `</table>`;
+
+      downloadExcel(html, "Celestio_Allotments");
     } catch (err) {
       toast({ title: "Export Failed", variant: "destructive" });
     }
+  };
+
+  const handleExportRound1 = async () => {
+    try {
+      const { leaderboard } = await getLeaderboard();
+      const cutoff = Math.ceil(leaderboard.length / 2);
+      let html = `<table border="1"><tr><th>Rank</th><th>Team ID</th><th>Team Name</th><th>Scans</th><th>Games Completed</th></tr>`;
+      leaderboard.forEach((t, index) => {
+        const isTop = index < cutoff;
+        const color = isTop ? "background-color: #d4edda; color: #155724;" : "";
+        html += `<tr style="${color}"><td>${index + 1}</td><td>${t.id}</td><td>${t.name}</td><td>${t.scanCount}</td><td>${t.gamesCount}</td></tr>`;
+      });
+      html += `</table>`;
+      downloadExcel(html, "Round1_Leaderboard");
+    } catch { toast({ variant: "destructive" }); }
+  };
+
+  const handleExportRound2 = async () => {
+    try {
+      const subs = await adminGetSubmissions(ADMIN_PASSWORD, 2);
+      let html = `<table border="1"><tr><th>Team ID</th><th>Team Name</th><th>Brand Logo Link</th><th>Banner Link</th></tr>`;
+      subs.forEach((s) => {
+        html += `<tr><td>${s.team_id}</td><td>${s.teams?.name}</td><td><a href="${s.link_2}">${s.link_2}</a></td><td><a href="${s.link_1}">${s.link_1}</a></td></tr>`;
+      });
+      html += `</table>`;
+      downloadExcel(html, "Round2_Submissions");
+    } catch { toast({ variant: "destructive" }); }
+  };
+
+  const handleExportRound3 = async () => {
+    try {
+      const subs = await adminGetSubmissions(ADMIN_PASSWORD, 3);
+      let html = `<table border="1"><tr><th>Team ID</th><th>Team Name</th><th>Live Demo Link</th><th>Source Code Link</th></tr>`;
+      subs.forEach((s) => {
+        html += `<tr><td>${s.team_id}</td><td>${s.teams?.name}</td><td><a href="${s.link_1}">${s.link_1}</a></td><td><a href="${s.link_2}">${s.link_2}</a></td></tr>`;
+      });
+      html += `</table>`;
+      downloadExcel(html, "Round3_Submissions");
+    } catch { toast({ variant: "destructive" }); }
   };
 
   const handleAssign = async (targetTeamId: string) => {
@@ -232,13 +300,11 @@ const Admin = () => {
               <h2 className="font-display text-4xl font-black cosmic-gradient-text mt-2">Admin Dashboard</h2>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 bg-accent/20 text-accent rounded-lg text-sm font-mono border border-accent/30 hover:bg-accent/30 transition-all font-bold"
-              >
-                <Download className="w-4 h-4" /> EXPORT
-              </button>
+            <div className="flex gap-2 flex-wrap items-center">
+              <button onClick={handleExportAllocations} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-mono font-bold hover:bg-white/10 transition-all"><Download className="w-3 h-3" /> ALLOTMENTS</button>
+              <button onClick={handleExportRound1} className="flex items-center gap-2 px-3 py-1.5 bg-primary/20 text-primary border border-primary/30 rounded-lg text-xs font-mono font-bold hover:bg-primary/30 transition-all"><Download className="w-3 h-3" /> ROUND 1</button>
+              <button onClick={handleExportRound2} className="flex items-center gap-2 px-3 py-1.5 bg-secondary/20 text-secondary border border-secondary/30 rounded-lg text-xs font-mono font-bold hover:bg-secondary/30 transition-all"><Download className="w-3 h-3" /> ROUND 2</button>
+              <button onClick={handleExportRound3} className="flex items-center gap-2 px-3 py-1.5 bg-accent/20 text-accent border border-accent/30 rounded-lg text-xs font-mono font-bold hover:bg-accent/30 transition-all"><Download className="w-3 h-3" /> ROUND 3</button>
               <button
                 onClick={() => { loadData(); loadConfig(); }}
                 className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all"
@@ -262,6 +328,9 @@ const Admin = () => {
               </TabsTrigger>
               <TabsTrigger value="qr" className="flex-1 py-3 font-display font-bold text-xs uppercase tracking-widest gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <MapPin className="w-4 h-4" /> QR Locs
+              </TabsTrigger>
+              <TabsTrigger value="brands" className="flex-1 py-3 font-display font-bold text-xs uppercase tracking-widest gap-2 data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
+                <Shield className="w-4 h-4" /> Brands
               </TabsTrigger>
             </TabsList>
 
@@ -406,6 +475,77 @@ const Admin = () => {
                   <div className="text-[10px] font-mono text-muted-foreground/30 text-center uppercase">Active Phase: Round {currentRound}</div>
                 </div>
               </div>
+
+              {/* SECOND ROW LIFECYCLE FOR R2 AND R3 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                {/* R2 Gate */}
+                <div className="glass-panel p-6 border-white/5 flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-display text-xs font-bold tracking-widest text-muted-foreground/50 uppercase mb-4">Round 2 Gating</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-mono text-foreground">Submissions</span>
+                      <span className={`text-[10px] font-mono font-bold uppercase rounded-full px-2 py-0.5 ${r2Open ? 'bg-primary/20 text-primary' : 'bg-destructive/20 text-destructive'}`}>
+                        {r2Open ? 'Open' : 'Closed'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleUpdateConfig("r2_open", r2Open ? "false" : "true")}
+                    disabled={updatingConfig === "r2_open"}
+                    className={`w-full py-2 mb-4 rounded-xl font-display font-black text-xs transition-all tracking-widest ${r2Open ? 'border border-destructive/20 text-destructive hover:bg-destructive/10' : 'bg-primary text-primary-foreground'}`}
+                  >
+                    {updatingConfig === "r2_open" ? "SYNC..." : (r2Open ? "CLOSE R2" : "OPEN R2")}
+                  </button>
+                  <div>
+                    <input
+                      type="datetime-local"
+                      value={r2Deadline}
+                      onChange={(e) => setR2Deadline(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs font-mono text-foreground outline-none mb-2"
+                    />
+                    <button
+                      onClick={() => handleUpdateConfig("r2_deadline", r2Deadline)}
+                      className="w-full py-2 bg-white/5 border border-white/10 rounded-xl font-display font-bold text-xs hover:bg-white/10 transition-all"
+                    >
+                      SYNC DEADLINE
+                    </button>
+                  </div>
+                </div>
+
+                {/* R3 Gate */}
+                <div className="glass-panel p-6 border-white/5 flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-display text-xs font-bold tracking-widest text-muted-foreground/50 uppercase mb-4">Round 3 Gating</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-mono text-foreground">Submissions</span>
+                      <span className={`text-[10px] font-mono font-bold uppercase rounded-full px-2 py-0.5 ${r3Open ? 'bg-secondary/20 text-secondary' : 'bg-destructive/20 text-destructive'}`}>
+                        {r3Open ? 'Open' : 'Closed'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleUpdateConfig("r3_open", r3Open ? "false" : "true")}
+                    disabled={updatingConfig === "r3_open"}
+                    className={`w-full py-2 mb-4 rounded-xl font-display font-black text-xs transition-all tracking-widest ${r3Open ? 'border border-destructive/20 text-destructive hover:bg-destructive/10' : 'bg-secondary text-secondary-foreground'}`}
+                  >
+                    {updatingConfig === "r3_open" ? "SYNC..." : (r3Open ? "CLOSE R3" : "OPEN R3")}
+                  </button>
+                  <div>
+                    <input
+                      type="datetime-local"
+                      value={r3Deadline}
+                      onChange={(e) => setR3Deadline(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs font-mono text-foreground outline-none mb-2"
+                    />
+                    <button
+                      onClick={() => handleUpdateConfig("r3_deadline", r3Deadline)}
+                      className="w-full py-2 bg-white/5 border border-white/10 rounded-xl font-display font-bold text-xs hover:bg-white/10 transition-all"
+                    >
+                      SYNC DEADLINE
+                    </button>
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             <div className="h-px bg-white/5 mb-12 shadow-[0_0_15px_rgba(255,255,255,0.05)]" />
@@ -471,7 +611,7 @@ const Admin = () => {
                   <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
                     {soloists.filter(s => 
                       s.name.toLowerCase().includes(soloSearch.toLowerCase()) || 
-                      s.rollNumber.toLowerCase().includes(soloSearch.toLowerCase())
+                      s.roll_number.toLowerCase().includes(soloSearch.toLowerCase())
                     ).map(s => (
                       <button
                         key={s.id}
@@ -482,7 +622,7 @@ const Admin = () => {
                           }`}
                       >
                         <div className="font-display font-bold text-sm">{s.name}</div>
-                        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1">{s.rollNumber}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground/40 mt-1">{s.roll_number}</div>
                       </button>
                     ))}
                     {soloists.length === 0 && (
@@ -548,9 +688,10 @@ const Admin = () => {
             {/* QR LOCATIONS TAB */}
             <TabsContent value="qr">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {[1, 2, 3, 4, 5].map(num => {
+                {[0, 1, 2, 3, 4].map(num => {
                   const stage = qrStages.find(s => s.stageNumber === num) || { stageNumber: num, location: "", clue: "" };
-                  const qrValue = `${window.location.origin}/scan?stage=${num}`;
+                  const qrValue = `${window.location.origin}/qr-scanner?stage=${num}`;
+                  const isStart = num === 0;
 
                   return (
                     <div key={num} className="glass-panel p-6 border-white/5 relative group overflow-hidden">
@@ -563,45 +704,9 @@ const Admin = () => {
                           <QRCodeSVG value={qrValue} size={100} level="H" id={`qr-stage-${num}`} />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-display text-lg font-bold mb-1">Stage {num}</h3>
+                          <h3 className="font-display text-lg font-bold mb-1">{isStart ? "Starting Point" : `Stage ${num}`}</h3>
                           <p className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-widest">QR Verification Point</p>
                           <div className="mt-4 flex gap-2">
-                            <button
-                              onClick={() => {
-                                const canvas = document.getElementById(`qr-stage-${num}`) as HTMLCanvasElement;
-                                if (canvas) {
-                                  const svg = canvas;
-                                  const svgData = new XMLSerializer().serializeToString(svg);
-                                  const canvasElement = document.createElement("canvas");
-                                  const ctx = canvasElement.getContext("2d");
-                                  const img = new Image();
-                                  img.onload = () => {
-                                    canvasElement.width = img.width + 40;
-                                    canvasElement.height = img.height + 80;
-                                    if (ctx) {
-                                      ctx.fillStyle = "white";
-                                      ctx.fillRect(0, 0, canvasElement.width, canvasElement.height);
-                                      ctx.drawImage(img, 20, 20);
-                                      ctx.fillStyle = "black";
-                                      ctx.font = "bold 20px Arial";
-                                      ctx.textAlign = "center";
-                                      ctx.fillText(`CELESTIO - STAGE ${num}`, canvasElement.width / 2, img.height + 50);
-                                      const pngUrl = canvasElement.toDataURL("image/png").replace("image/png", "image/octet-stream");
-                                      const downloadLink = document.createElement("a");
-                                      downloadLink.href = pngUrl;
-                                      downloadLink.download = `Celestio_Stage_${num}.png`;
-                                      document.body.appendChild(downloadLink);
-                                      downloadLink.click();
-                                      document.body.removeChild(downloadLink);
-                                    }
-                                  };
-                                  img.src = "data:image/svg+xml;base64," + btoa(svgData);
-                                }
-                              }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg text-[10px] font-mono hover:bg-primary/20 transition-all font-bold"
-                            >
-                              <Download className="w-3 h-3" /> PNG
-                            </button>
                             <div className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-mono text-muted-foreground flex items-center gap-1.5">
                               <Eye className="w-3 h-3" /> {qrValue.replace(window.location.origin, '')}
                             </div>
@@ -629,14 +734,14 @@ const Admin = () => {
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Clue/Description</label>
                           <textarea
-                            placeholder="Provide a cryptic clue for the next team..."
+                            placeholder={isStart ? "Provide the clue that leads to Stage 1..." : "Clue leading to the NEXT stage..."}
                             rows={3}
                             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono focus:border-primary/50 outline-none resize-none"
                             value={Array.isArray(stage.clue) ? stage.clue.join('\n') : stage.clue}
                             onChange={(e) => {
                               const newStages = [...qrStages];
                               const idx = newStages.findIndex(s => s.stageNumber === num);
-                              const val = e.target.value.includes('\n') ? e.target.value.split('\n') : e.target.value;
+                              const val = e.target.value;
                               if (idx > -1) newStages[idx].clue = val;
                               else newStages.push({ stageNumber: num, location: "", clue: val });
                               setQrStages(newStages);
@@ -657,6 +762,11 @@ const Admin = () => {
                 })}
               </div>
             </TabsContent>
+
+            {/* BRANDS TAB */}
+            <TabsContent value="brands">
+              <BrandsManager />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -665,3 +775,116 @@ const Admin = () => {
 };
 
 export default Admin;
+
+const BrandsManager = () => {
+    const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [newBrand, setNewBrand] = useState("");
+    const [adding, setAdding] = useState(false);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        const loadBrands = async () => {
+            try {
+                const { getBrands } = await import("@/lib/apiClient");
+                const data = await getBrands();
+                setBrands(data || []);
+            } catch (err) {
+                console.error("Failed to load brands:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadBrands();
+    }, []);
+
+    const handleAdd = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newBrand) return;
+        try {
+            setAdding(true);
+            const { addBrand } = await import("@/lib/apiClient");
+            const brand = await addBrand(newBrand);
+            setBrands([...brands, brand]);
+            setNewBrand("");
+            toast({ title: "Brand Added" });
+        } catch (err) {
+            toast({ title: "Failed to add brand", description: err.message, variant: "destructive" });
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleDelete = async (id: number) => {
+        try {
+            const { deleteBrand } = await import("@/lib/apiClient");
+            await deleteBrand(id);
+            setBrands(brands.filter(b => b.id !== id));
+            toast({ title: "Brand Removed" });
+        } catch (err) {
+            toast({ title: "Failed to remove brand", variant: "destructive" });
+        }
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="glass-panel p-6 border-white/5 lg:col-span-1 h-fit">
+                <h3 className="font-display text-lg font-bold mb-6">Register Brand</h3>
+                <form onSubmit={handleAdd} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">New Brand Identity</label>
+                      <input
+                          type="text"
+                          placeholder="e.g., Apple, Tesla, SpaceX"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-accent/50 outline-none"
+                          value={newBrand}
+                          onChange={(e) => setNewBrand(e.target.value)}
+                      />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={adding || !newBrand}
+                        className="w-full py-4 bg-accent text-accent-foreground rounded-xl font-display font-black text-xs tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                    >
+                        {adding ? "INITIALIZING..." : "ADD TO POOL"}
+                    </button>
+                </form>
+            </div>
+
+            <div className="lg:col-span-2 space-y-4">
+                <div className="flex items-center justify-between px-2">
+                    <h3 className="font-display text-lg font-bold">Allocated Brand Pool</h3>
+                    <span className="text-[10px] font-mono bg-accent/10 text-accent px-2 py-0.5 rounded-full">{brands.length} Identifiers</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {loading ? (
+                        <div className="col-span-full py-20 text-center glass-panel border-white/5">
+                            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-accent/50" />
+                            <p className="font-mono text-xs text-muted-foreground/30 uppercase tracking-widest">Scanning records...</p>
+                        </div>
+                    ) : brands.map(b => (
+                        <div key={b.id} className="glass-panel p-4 flex items-center justify-between border-white/5 group hover:border-accent/30 transition-all">
+                            <div className="flex flex-col">
+                              <span className="font-display font-bold text-sm tracking-tight">{b.name}</span>
+                              <span className="text-[9px] font-mono text-muted-foreground/30">ID: {b.id.toString().padStart(4, '0')}</span>
+                            </div>
+                            <button
+                                onClick={() => handleDelete(b.id)}
+                                className="p-2 text-destructive/40 hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                                title="Remove Brand"
+                            >
+                              <Plus className="w-4 h-4 rotate-45" />
+                            </button>
+                        </div>
+                    ))}
+                    {!loading && brands.length === 0 && (
+                        <div className="col-span-full py-20 text-center glass-panel border-white/5 opacity-30">
+                            <AlertCircle className="w-8 h-8 mx-auto mb-4" />
+                            <p className="font-mono text-xs uppercase tracking-widest">Pool is empty</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};

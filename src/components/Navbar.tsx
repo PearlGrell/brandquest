@@ -92,12 +92,12 @@ const Navbar = () => {
                 Play
               </Link>
               <Link
-                to="/qr-scanner"
-                className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-mono font-medium transition-all duration-300 hover:bg-primary/10 hover:text-primary ${location.pathname === "/qr-scanner" ? "text-primary bg-primary/10" : "text-muted-foreground"
+                to="/rounds"
+                className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-mono font-medium transition-all duration-300 hover:bg-primary/10 hover:text-primary ${location.pathname === "/rounds" ? "text-primary bg-primary/10" : "text-muted-foreground"
                   }`}
               >
                 <QrCode className="w-4 h-4" />
-                Round 1
+                Rounds
               </Link>
               <Link
                 to="/leaderboard"

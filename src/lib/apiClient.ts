@@ -152,24 +152,41 @@ export async function joinMatchup(participantId: string, targetTeamId: string) {
 // ==================== QR Scanning ====================
 
 export async function scanQRCode(teamId: string, stageNumber: number) {
-  const { error } = await supabase.rpc("scan_qr_code", { 
+  const { data, error } = await supabase.rpc("scan_qr_code", { 
     p_team_id: teamId, 
     p_stage_number: stageNumber 
   });
 
   if (error) throw new Error(error.message);
-  return { message: "Scan successful" };
+  return data; // returns { success, message, scan: { ... } }
 }
 
 export async function getQRScans(teamId: string) {
-  const { data, error } = await supabase
+  const { data: scansData, error: scansError } = await supabase
     .from("scans")
     .select("*")
     .eq("team_id", teamId)
-    .order("scanned_at", { ascending: false });
+    .order("scanned_at", { ascending: true }); // Order by actual scan time
 
-  if (error) throw new Error(error.message);
-  return { scans: data };
+  if (scansError) throw new Error(scansError.message);
+
+  const { data: teamData } = await supabase
+    .from("teams")
+    .select("assigned_brand")
+    .eq("id", teamId)
+    .single();
+
+  const formattedScans = scansData.map((scan) => ({
+    stageNumber: scan.stage_number,
+    randomDigit: scan.revealed_digit || "-",
+    scannedAt: scan.scanned_at,
+  }));
+
+  const completion = (formattedScans.length === 5 && teamData?.assigned_brand)
+    ? { brandName: teamData.assigned_brand, completedAt: formattedScans[4].scannedAt }
+    : undefined;
+
+  return { scans: formattedScans, completion };
 }
 
 // ==================== Participants ====================
@@ -242,7 +259,11 @@ export async function getEventStatus() {
     isStarted: map.get("isStarted") === "true",
     registrationEnded: endedManually || endedByDeadline,
     registrationDeadline: deadlineRaw,
-    currentRound: parseInt((map.get("currentRound") as string) || "1")
+    currentRound: parseInt((map.get("currentRound") as string) || "1"),
+    r2Open: map.get("r2_open") === "true",
+    r2Deadline: map.get("r2_deadline") || null,
+    r3Open: map.get("r3_open") === "true",
+    r3Deadline: map.get("r3_deadline") || null
   };
 }
 
@@ -264,19 +285,35 @@ export async function getLeaderboard() {
       id, 
       name, 
       is_solo, 
-      scans(id),
-      games_completed(id)
+      scans(scanned_at),
+      games_completed(completed_at)
     `);
 
   if (error) throw new Error(error.message);
 
-  const leaderboard = teams.map(t => ({
-    id: t.id,
-    name: t.name,
-    isSolo: t.is_solo,
-    scanCount: t.scans.length,
-    gamesCount: t.games_completed.length
-  })).sort((a, b) => (b.scanCount - a.scanCount) || (b.gamesCount - a.gamesCount));
+  const leaderboard = teams.map(t => {
+    // Get latest activity timestamp for tie-breaking
+    const lastScan = t.scans.length > 0 ? Math.max(...t.scans.map(s => new Date(s.scanned_at).getTime())) : 0;
+    const lastGame = t.games_completed.length > 0 ? Math.max(...t.games_completed.map(g => new Date(g.completed_at).getTime())) : 0;
+    const lastActivity = Math.max(lastScan, lastGame);
+
+    return {
+      id: t.id,
+      name: t.name,
+      isSolo: t.is_solo,
+      scanCount: t.scans.length,
+      gamesCount: t.games_completed.length,
+      lastActivity
+    };
+  }).sort((a, b) => {
+    // 1. More scans first
+    if (b.scanCount !== a.scanCount) return b.scanCount - a.scanCount;
+    // 2. More games first
+    if (b.gamesCount !== a.gamesCount) return b.gamesCount - a.gamesCount;
+    // 3. Earlier completion time first (if activity exists)
+    if (a.lastActivity > 0 && b.lastActivity > 0) return a.lastActivity - b.lastActivity;
+    return 0;
+  });
 
   return { leaderboard };
 }
@@ -445,5 +482,76 @@ export async function getAdminData(password: string) {
   
   if (sErr || tErr) throw new Error("Failed to fetch admin data");
   return { soloists, teamsWithSpace: teams.filter(t => t.participants.length < 3) };
+}
+
+
+// ==================== Brands ====================
+
+export async function getBrands() {
+  const { data, error } = await supabase
+    .from("brands")
+    .select("*")
+    .order("name", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function addBrand(name: string) {
+  const { data, error } = await supabase
+    .from("brands")
+    .insert({ name })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function deleteBrand(id: number) {
+  const { error } = await supabase
+    .from("brands")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+  return { message: "Brand deleted" };
+}
+
+// ==================== Submissions ====================
+
+export async function submitRound(teamId: string, round: number, link1: string, link2: string) {
+  const { data, error } = await supabase
+    .from("submissions")
+    .insert({ team_id: teamId, round, link_1: link1, link_2: link2 })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getSubmission(teamId: string, round: number) {
+  const { data, error } = await supabase
+    .from("submissions")
+    .select("*")
+    .eq("team_id", teamId)
+    .eq("round", round)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function adminGetSubmissions(password: string, round: number) {
+  if (password !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+  
+  const { data, error } = await supabase
+    .from("submissions")
+    .select("*, teams(name)")
+    .eq("round", round);
+
+  if (error) throw new Error(error.message);
+  return data;
 }
 
