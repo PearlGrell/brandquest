@@ -8,9 +8,10 @@ import Level3 from "@/components/game/Level3";
 import { Rocket, Check, Sparkles, ArrowRight } from "lucide-react";
 import { isGameCompleted, markGameCompleted, getCompletedGames } from "@/lib/gameCompletion";
 import { markGameComplete } from "@/lib/apiClient";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const GamePage = () => {
+  const navigate = useNavigate();
   const [level, setLevel] = useState<number | null>(() => {
     const saved = localStorage.getItem("celestio_game_level");
     return saved ? parseInt(saved) : null;
@@ -81,6 +82,10 @@ const GamePage = () => {
           setLevel(nextLevel);
         } else {
           setLevel(null);
+          // If all games completed and not logged in, route to register
+          if (!isLoggedIn) {
+            navigate("/register");
+          }
         }
       }, 2000);
     }
@@ -305,7 +310,9 @@ const GamePage = () => {
                           Challenge Complete!
                         </h3>
                         <p className="font-mono text-muted-foreground/70 text-sm">
-                          Returning to challenges...
+                          {completedGames.size >= 3 && !isLoggedIn 
+                            ? "Ultimate clearance granted. Redirecting to terminal..." 
+                            : "Returning to challenges..."}
                         </p>
                       </motion.div>
                     </motion.div>

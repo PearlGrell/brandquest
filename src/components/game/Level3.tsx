@@ -24,6 +24,18 @@ const Level3 = ({ onComplete }: { onComplete: () => void }) => {
   const [activeWire, setActiveWire] = useState<{from: string, color: string, pos: Point} | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(400);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      if (entries[0]) {
+        setContainerWidth(entries[0].contentRect.width);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const [completed, setCompleted] = useState(false);
   const [wrongCount, setWrongCount] = useState(0);
@@ -194,7 +206,7 @@ const Level3 = ({ onComplete }: { onComplete: () => void }) => {
           {connections.map((conn) => {
             const leftIdx = leftNodes.findIndex(n => n.id === conn.from);
             const rightIdx = rightNodes.findIndex(n => n.id === conn.to);
-            const d = drawBezier(40, nodeY(leftIdx), 360, nodeY(rightIdx));
+            const d = drawBezier(40, nodeY(leftIdx), containerWidth - 40, nodeY(rightIdx));
             return (
               <g key={conn.from}>
                 <path
