@@ -1,143 +1,152 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Lightbulb } from "lucide-react";
+import { Check, Lightbulb, RefreshCcw } from "lucide-react";
 import { useHints } from "@/hooks/useHints";
 import { HintButton } from "./Level1";
 
-interface CodeLine {
-  id: number;
-  code: string;
-  buggy: boolean;
-  fix: string;
-  hint: string;
-}
-
-const CODE_SETS: { lines: CodeLine[]; hints: string[] }[] = [
-  {
-    lines: [
-      { id: 0, code: 'if (user = loggedIn) {', buggy: true, fix: 'if (user === loggedIn) {', hint: "Assignment vs comparison" },
-      { id: 1, code: '  console.log("Welcome");', buggy: false, fix: '  console.log("Welcome");', hint: "" },
-      { id: 2, code: '  data = fetchData();', buggy: true, fix: '  const data = fetchData();', hint: "Missing declaration" },
-      { id: 3, code: '  for (let i = 0; i <= data.lenght; i++) {', buggy: true, fix: '  for (let i = 0; i < data.length; i++) {', hint: "Typo + off-by-one" },
-      { id: 4, code: '    render(data[i]);', buggy: false, fix: '    render(data[i]);', hint: "" },
-      { id: 5, code: '  }', buggy: false, fix: '  }', hint: "" },
-      { id: 6, code: '}', buggy: false, fix: '}', hint: "" },
-    ],
-    hints: [
-      "Line 1 has an assignment operator where a comparison should be.",
-      "Line 3 is missing a keyword for variable declaration.",
-      "Line 4 has a typo in a property name and a boundary error.",
-      "Only 3 lines have bugs — don't click the clean ones!",
-    ],
-  },
-  {
-    lines: [
-      { id: 0, code: 'function launch(rocket) {', buggy: false, fix: 'function launch(rocket) {', hint: "" },
-      { id: 1, code: '  let fuel = rocket.getFule();', buggy: true, fix: '  let fuel = rocket.getFuel();', hint: "Method name typo" },
-      { id: 2, code: '  if (fuel > 0) {', buggy: false, fix: '  if (fuel > 0) {', hint: "" },
-      { id: 3, code: '    rocket.ignite()', buggy: true, fix: '    rocket.ignite();', hint: "Missing semicolon" },
-      { id: 4, code: '    console.log("Liftoff!");', buggy: false, fix: '    console.log("Liftoff!");', hint: "" },
-      { id: 5, code: '  } else {', buggy: false, fix: '  } else {', hint: "" },
-      { id: 6, code: '    thorw new Error("No fuel");', buggy: true, fix: '    throw new Error("No fuel");', hint: "Keyword typo" },
-      { id: 7, code: '  }', buggy: false, fix: '  }', hint: "" },
-      { id: 8, code: '}', buggy: false, fix: '}', hint: "" },
-    ],
-    hints: [
-      "Line 2 has a misspelled method name.",
-      "Line 4 is missing statement termination.",
-      "Line 7 has a keyword typed wrong.",
-      "Only 3 lines have bugs!",
-    ],
-  },
-  {
-    lines: [
-      { id: 0, code: 'const stars = [];', buggy: false, fix: 'const stars = [];', hint: "" },
-      { id: 1, code: 'for (let i = 0; i < 10; i--) {', buggy: true, fix: 'for (let i = 0; i < 10; i++) {', hint: "Wrong increment" },
-      { id: 2, code: '  const star = createStar(i);', buggy: false, fix: '  const star = createStar(i);', hint: "" },
-      { id: 3, code: '  star.brightnes = Math.random();', buggy: true, fix: '  star.brightness = Math.random();', hint: "Property typo" },
-      { id: 4, code: '  stars.push(star);', buggy: false, fix: '  stars.push(star);', hint: "" },
-      { id: 5, code: '}', buggy: false, fix: '}', hint: "" },
-      { id: 6, code: 'retrun stars;', buggy: true, fix: 'return stars;', hint: "Keyword typo" },
-    ],
-    hints: [
-      "Line 2 has the wrong direction of counting.",
-      "Line 4 has a misspelled property.",
-      "Line 7 has a keyword typed backwards.",
-      "3 bugs total — look for typos and logic errors.",
-    ],
-  },
+const COLORS = [
+  { id: "red", color: "#EF4444" },
+  { id: "blue", color: "#3B82F6" },
+  { id: "green", color: "#10B981" },
+  { id: "yellow", color: "#F59E0B" },
 ];
 
+interface Point {
+  x: number;
+  y: number;
+}
+
 const Level3 = ({ onComplete }: { onComplete: () => void }) => {
-  const [setIndex, difficulty] = useMemo(() => {
-    const session = localStorage.getItem("celestio_session");
-    let seed = 42;
-    if (session) {
-      try {
-        const id = JSON.parse(session).teamId || "";
-        seed = id.charCodeAt(4) || 42;
-      } catch { /* fallback */ }
-    }
+  const [leftNodes] = useState(COLORS);
+  const [rightNodes, setRightNodes] = useState([...COLORS].sort(() => Math.random() - 0.5));
+  
+  const [connections, setConnections] = useState<{from: string, to: string, color: string}[]>([]);
+  const [activeWire, setActiveWire] = useState<{from: string, color: string, pos: Point} | null>(null);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
 
-    const set = seed % CODE_SETS.length;
-    const diff = CODE_SETS[set].lines.some((l, i) => l.buggy && [0, 2, 6].includes(i % 4)) ? "easy" :
-      CODE_SETS[set].lines.some((l, i) => l.buggy && [1, 3, 7].includes(i % 5)) ? "hard" : "medium";
-    return [set, diff];
-  }, []);
-
-  const { lines: CODE_LINES, hints: HINTS } = CODE_SETS[setIndex];
-  const totalBugs = CODE_LINES.filter((l) => l.buggy).length;
-
-  const [fixed, setFixed] = useState<Set<number>>(new Set());
-  const [wrongClick, setWrongClick] = useState<number | null>(null);
   const [completed, setCompleted] = useState(false);
-  const [showHint, setShowHint] = useState<string | null>(null);
-  const hintIndexRef = useRef(0);
+  const [wrongCount, setWrongCount] = useState(0);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
   const { hintsRemaining, canUseHint, submitHint } = useHints();
+  const [showHint, setShowHint] = useState<string | null>(null);
 
   const handleHint = () => {
     if (!canUseHint) return;
-    const idx = hintIndexRef.current;
-    if (idx >= HINTS.length) return;
     if (submitHint()) {
-      setShowHint(HINTS[idx]);
-      hintIndexRef.current = idx + 1;
+      setShowHint("Connect the matching colors. Drag from the left port to the right port.");
       setTimeout(() => setShowHint(null), 5000);
     }
   };
 
-  const handleLineClick = (line: CodeLine) => {
-    if (completed) return;
-    if (line.buggy && !fixed.has(line.id)) {
-      const newFixed = new Set(fixed).add(line.id);
-      setFixed(newFixed);
-      if (newFixed.size === totalBugs) {
-        setCompleted(true);
-        setTimeout(onComplete, 1500);
-      }
-    } else if (!line.buggy) {
-      setWrongClick(line.id);
-      setTimeout(() => setWrongClick(null), 500);
-    }
+  const getPointerPos = (e: React.PointerEvent | PointerEvent) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
+    const rect = containerRef.current.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
   };
 
+  const handlePointerDown = (id: string, color: string, e: React.PointerEvent) => {
+    if (completed) return;
+    // Remove existing connection for this node
+    setConnections(prev => prev.filter(c => c.from !== id));
+    e.target.releasePointerCapture(e.pointerId); // Allows pointer events on underlying elements
+    setActiveWire({ from: id, color, pos: getPointerPos(e) });
+  };
+
+  useEffect(() => {
+    const handleMove = (e: PointerEvent) => {
+      if (activeWire) {
+        setActiveWire({ ...activeWire, pos: getPointerPos(e) });
+      }
+    };
+    
+    const handleUp = (e: PointerEvent) => {
+      if (activeWire) {
+        // Find if we snapped to a right node
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const rightNodeEl = elements.find(el => el.getAttribute("data-right-node"));
+        
+        if (rightNodeEl) {
+          const toId = rightNodeEl.getAttribute("data-right-node") as string;
+          
+          if (toId === activeWire.from) {
+            // Correct connection
+            setConnections(prev => [...prev.filter(c => c.to !== toId), { from: activeWire.from, to: toId, color: activeWire.color }]);
+          } else {
+            // Wrong connection
+            const newWrongCount = wrongCount + 1;
+            setWrongCount(newWrongCount);
+            if (newWrongCount >= 2) {
+              // Auto Complete with staggered animation
+              setActiveWire(null);
+              setFeedback("System Override Initiated. Patching...");
+              
+              let step = 0;
+              const int = setInterval(() => {
+                const c = COLORS[step];
+                if (c) {
+                  setConnections(prev => [...prev.filter(p => p.from !== c.id), { from: c.id, to: c.id, color: c.color }]);
+                  step++;
+                } else {
+                  clearInterval(int);
+                  setCompleted(true);
+                  setFeedback("Override applied. Ports patched automatically.");
+                  setTimeout(onComplete, 2500);
+                }
+              }, 400);
+              return;
+            } else {
+              setFeedback("Mismatched frequencies detected! Try again.");
+              setTimeout(() => setFeedback(null), 2000);
+            }
+          }
+        }
+        setActiveWire(null);
+      }
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [activeWire, wrongCount, completed]);
+
+  useEffect(() => {
+    if (connections.length === COLORS.length && !completed) {
+      setCompleted(true);
+      setFeedback("System effectively patched.");
+      setTimeout(onComplete, 2500);
+    }
+  }, [connections]);
+
+  const drawBezier = (x1: number, y1: number, x2: number, y2: number) => {
+    const dx = Math.abs(x2 - x1) * 0.5;
+    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+  };
+
+  // Fixed positions for standard container sizes
+  const nodeY = (index: number) => 60 + index * 80;
+
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center w-full select-none">
       <div className="flex items-center gap-4 mb-2">
-        <h3 className="font-display text-2xl font-bold text-accent neon-text-blue">System Debug</h3>
+        <h3 className="font-display text-2xl font-bold text-accent neon-text-blue">System Patch</h3>
         <HintButton hintsRemaining={hintsRemaining} canUseHint={canUseHint} onClick={handleHint} />
       </div>
-      <p className="text-sm font-mono text-muted-foreground mb-6 flex items-center justify-center gap-2">
-        Click on the buggy lines to fix them.
-        <span className="text-xs uppercase tracking-widest text-accent">({difficulty})</span>
+      <p className="text-sm font-mono text-muted-foreground mb-6 text-center">
+        Route the high-frequency cables to their corresponding ports. Drag to connect!
       </p>
 
       <AnimatePresence>
         {showHint && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
             className="glass-panel px-4 py-2 mb-4 border-accent/40 flex items-center gap-2"
           >
             <Lightbulb className="w-4 h-4 text-accent" />
@@ -146,47 +155,122 @@ const Level3 = ({ onComplete }: { onComplete: () => void }) => {
         )}
       </AnimatePresence>
 
-      <div className="glass-panel p-6 font-mono text-sm max-w-lg w-full">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/30">
-          <span className="text-xs font-display text-muted-foreground">main.js</span>
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${completed ? "bg-green-500" : "bg-destructive"}`} />
-            <span className="text-xs text-muted-foreground">{fixed.size}/{totalBugs} bugs fixed</span>
+      <div 
+        ref={containerRef}
+        className="w-full max-w-[400px] h-[380px] bg-[hsl(260,100%,3%)]/80 backdrop-blur-md rounded-3xl border-2 border-white/10 relative overflow-hidden shadow-2xl mb-6 touch-none"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.05),transparent)] pointer-events-none" />
+
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.2))" }}>
+          {/* Render established connections */}
+          {connections.map((conn) => {
+            const leftIdx = leftNodes.findIndex(n => n.id === conn.from);
+            const rightIdx = rightNodes.findIndex(n => n.id === conn.to);
+            const d = drawBezier(40, nodeY(leftIdx), 360, nodeY(rightIdx));
+            return (
+              <g key={conn.from}>
+                <path
+                  d={d}
+                  fill="none" stroke={conn.color} strokeWidth="12" strokeLinecap="round"
+                  className="transition-all duration-300 drop-shadow-[0_0_12px_currentColor]"
+                  style={{ filter: "brightness(1.2)" }}
+                />
+                <path
+                  d={d}
+                  fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round"
+                  className="opacity-50"
+                  strokeDasharray="10 20"
+                >
+                  <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1s" repeatCount="indefinite" />
+                </path>
+              </g>
+            );
+          })}
+
+          {/* Render active dragging wire */}
+          {activeWire && (
+            <path
+              d={drawBezier(40, nodeY(leftNodes.findIndex(n => n.id === activeWire.from)), activeWire.pos.x, activeWire.pos.y)}
+              fill="none" stroke={activeWire.color} strokeWidth="12" strokeLinecap="round"
+              className="drop-shadow-[0_0_15px_currentColor]"
+              style={{ filter: "brightness(1.5)" }}
+            />
+          )}
+        </svg>
+
+        {/* Nodes */}
+        {leftNodes.map((node, i) => (
+          <div
+            key={`left-${node.id}`}
+            className="absolute left-6 w-8 h-8 rounded-full border-4 border-[hsl(260,100%,10%)] cursor-pointer z-20 hover:scale-110 active:scale-90 transition-transform shadow-[inset_0_0_10px_rgba(0,0,0,0.5)] flex items-center justify-center group"
+            style={{ top: nodeY(i) - 16, backgroundColor: node.color, boxShadow: `0 0 20px ${node.color}50` }}
+            onPointerDown={(e) => handlePointerDown(node.id, node.color, e)}
+          >
+             <div className="w-3 h-3 rounded-full bg-black/40" />
           </div>
-        </div>
-        {CODE_LINES.map((line) => {
-          const isFixed = fixed.has(line.id);
+        ))}
+        
+        {rightNodes.map((node, i) => {
+          const isConnected = connections.some(c => c.to === node.id);
           return (
-            <motion.div
-              key={line.id}
-              className={`px-3 py-2 rounded cursor-pointer transition-all duration-200 flex items-center gap-3 group ${isFixed
-                  ? "bg-accent/10 text-accent border-l-2 border-accent"
-                  : wrongClick === line.id
-                    ? "bg-destructive/10 text-destructive"
-                    : "hover:bg-primary/10 text-foreground/80 border-l-2 border-transparent"
-                }`}
-              onClick={() => handleLineClick(line)}
-              animate={wrongClick === line.id ? { x: [0, -4, 4, -4, 0] } : {}}
+            <div
+              key={`right-${node.id}`}
+              data-right-node={node.id}
+              className="absolute right-6 w-8 h-8 rounded-full border-4 border-dashed cursor-crosshair z-20 flex items-center justify-center transition-all bg-[hsl(260,100%,10%)]"
+              style={{ 
+                top: nodeY(i) - 16, 
+                borderColor: isConnected ? node.color : "rgba(255,255,255,0.2)",
+                boxShadow: isConnected ? `0 0 20px ${node.color}` : "inset 0 0 10px rgba(0,0,0,0.8)"
+              }}
             >
-              <span className="text-muted-foreground/40 w-5 text-right text-xs select-none font-mono">{line.id + 1}</span>
-              <code className="flex-1 font-mono text-sm whitespace-pre-wrap break-words">{isFixed ? line.fix : line.code}</code>
-              {isFixed && <Check className="w-3 h-3 text-accent ml-auto" />}
-              {line.buggy && !isFixed && (
-                <span className="w-1.5 h-1.5 rounded-full bg-destructive/60 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
-            </motion.div>
+               <div 
+                 className={`w-3 h-3 rounded-full transition-colors ${isConnected ? 'bg-white' : 'bg-transparent'}`} 
+                 style={{ backgroundColor: isConnected ? node.color : undefined }}
+               />
+               
+               {/* Color Hint for right side */}
+               <div 
+                className="absolute right-12 w-4 h-1 rounded-full opacity-30"
+                style={{ backgroundColor: node.color }}
+               />
+            </div>
           );
         })}
+        
+        {completed && (
+          <motion.div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex items-center justify-center flex-col gap-4 text-center p-6"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+          >
+            <Check className="w-16 h-16 text-primary neon-text" />
+            <div className="font-display text-2xl font-black cosmic-gradient-text">SYSTEM PATCHED</div>
+          </motion.div>
+        )}
       </div>
-      {completed && (
-        <motion.div
-          className="mt-4 flex items-center gap-2 text-accent font-display neon-text-blue"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-        >
-          <Check className="w-5 h-5" /> System Debugged!
-        </motion.div>
-      )}
+
+      <AnimatePresence>
+        {feedback && (
+          <motion.div
+            className={`text-sm font-mono mt-2 ${completed ? 'text-green-400' : 'text-destructive'}`}
+            initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+          >
+            {feedback}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <button
+        onClick={() => {
+          if (!completed) {
+            setConnections([]);
+            setRightNodes(prev => [...prev].sort(() => Math.random() - 0.5));
+          }
+        }}
+        disabled={completed}
+        className="mt-4 flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-white transition-colors disabled:opacity-50"
+      >
+        <RefreshCcw className="w-4 h-4" /> Reset Output Relays
+      </button>
     </div>
   );
 };

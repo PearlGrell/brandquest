@@ -15,31 +15,31 @@ interface Member {
 const generateTeamId = () => "CEL-" + Math.random().toString(36).substring(2, 7).toUpperCase();
 
 const FloatingInput = ({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
-  <div className="relative group">
+  <div className="relative group mt-2">
     <input
       {...props}
-      className="w-full bg-transparent border-b border-border/30 px-1 py-3 font-mono text-sm text-foreground placeholder:text-transparent focus:placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/60 transition-all duration-300 peer"
+      className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3.5 font-mono text-sm text-foreground placeholder:text-transparent focus:placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all duration-300 peer"
     />
-    <label className="absolute left-1 top-3 text-sm font-mono text-muted-foreground/50 transition-all duration-300 peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:text-[10px] pointer-events-none">
+    <label className="absolute left-3 top-3.5 px-1 text-sm font-mono text-white/50 transition-all duration-300 peer-focus:-top-2.5 peer-focus:text-[10px] peer-focus:bg-[hsl(260,100%,4%)] peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2.5 peer-[:not(:placeholder-shown)]:text-[10px] peer-[:not(:placeholder-shown)]:bg-[hsl(260,100%,4%)] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none rounded-sm">
       {label}
     </label>
   </div>
 );
 
 const FloatingSelect = ({ label, children, ...props }: { label: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <div className="relative group">
+  <div className="relative group mt-2">
     <select
       {...props}
-      className="floating-select w-full bg-background/60 border-b border-border/30 px-1 py-3 font-mono text-sm text-foreground focus:outline-none focus:border-primary/70 transition-all duration-300 appearance-none cursor-pointer pr-7 peer"
+      className="floating-select w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3.5 font-mono text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all duration-300 appearance-none cursor-pointer pr-10 peer"
     >
       {children}
     </select>
-    <div className="absolute right-0 top-3 text-muted-foreground/70 peer-focus:text-primary transition-colors pointer-events-none">
+    <div className="absolute right-4 top-4 text-white/50 peer-focus:text-primary transition-colors pointer-events-none">
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 9l6 6 6-6" />
       </svg>
     </div>
-    <label className="absolute left-1 -top-2 text-[10px] font-mono text-muted-foreground/50 pointer-events-none">
+    <label className="absolute left-3 -top-2.5 px-1 text-[10px] font-mono bg-[hsl(260,100%,4%)] text-white/80 pointer-events-none rounded-sm">
       {label}
     </label>
   </div>
@@ -47,7 +47,6 @@ const FloatingSelect = ({ label, children, ...props }: { label: string; children
 
 const Register = () => {
   const [isSolo, setIsSolo] = useState(false);
-  const [wantsMatchup, setWantsMatchup] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<Member[]>([
@@ -164,7 +163,7 @@ const Register = () => {
     try {
       const id = isSolo ? "" : generateTeamId();
 
-      await registerTeam(id, effectiveTeamName, password, email, isSolo, wantsMatchup, members);
+      await registerTeam(id, effectiveTeamName, password, email, isSolo, true, members);
 
       setResult({ id: isSolo ? members[0].rollNumber.toUpperCase() : id, password, isSolo });
       setErrors([]);
@@ -270,25 +269,9 @@ const Register = () => {
       <div className="relative z-10 pt-28 pb-16 px-4">
         <div className="container mx-auto max-w-lg">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            {/* Solo/Team Toggle */}
-            <div className="flex bg-white/5 p-1 rounded-2xl max-w-[240px] mx-auto mb-10 border border-white/10">
-              <button
-                onClick={() => toggleSolo(false)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl transition-all font-display text-sm font-bold ${!isSolo ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <UserPlus className="w-4 h-4" /> Team
-              </button>
-              <button
-                onClick={() => toggleSolo(true)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl transition-all font-display text-sm font-bold ${isSolo ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <User className="w-4 h-4" /> Solo
-              </button>
-            </div>
-
-            <div className="text-center mb-10">
+            <div className="text-center mb-8">
               <h2 className="font-display text-3xl md:text-4xl font-black cosmic-gradient-text mb-2">
-                {isSolo ? "Solo Registration" : "Register Team"}
+                {isSolo ? "Register Solo" : "Register Team"}
               </h2>
               <p className="font-mono text-muted-foreground/60 text-sm">
                 {isSolo ? "Joining as an individual explorer" : "2–3 members per squad"}
@@ -299,6 +282,22 @@ const Register = () => {
                 animate={{ width: "8rem" }}
                 transition={{ delay: 0.3, duration: 0.8 }}
               />
+            </div>
+
+            {/* Solo/Team Toggle */}
+            <div className="flex bg-white/5 p-1 rounded-2xl max-w-[240px] mx-auto mb-10 border border-white/10">
+              <button
+                onClick={() => toggleSolo(false)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl transition-all font-display text-sm font-bold ${!isSolo ? "bg-primary text-primary-foreground shadow-lg" : "text-white/80 hover:text-white"}`}
+              >
+                <UserPlus className="w-4 h-4" /> Team
+              </button>
+              <button
+                onClick={() => toggleSolo(true)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl transition-all font-display text-sm font-bold ${isSolo ? "bg-primary text-primary-foreground shadow-lg" : "text-white/80 hover:text-white"}`}
+              >
+                <User className="w-4 h-4" /> Solo
+              </button>
             </div>
 
             {registrationEnded ? (
@@ -373,21 +372,6 @@ const Register = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-
-                {(isSolo || members.length < 3) && (
-                  <div className="flex items-center gap-3 p-4 glass-panel-strong rounded-xl border border-white/5">
-                    <input
-                      type="checkbox"
-                      id="matchup"
-                      checked={wantsMatchup}
-                      onChange={(e) => setWantsMatchup(e.target.checked)}
-                      className="w-4 h-4 accent-primary"
-                    />
-                    <label htmlFor="matchup" className="text-xs font-mono text-muted-foreground cursor-pointer">
-                      {isSolo ? "I want to be matched with other teams/soloists" : `I want more members (${3 - members.length} more needed)`}
-                    </label>
-                  </div>
-                )}
               </div>
 
               {/* Divider */}

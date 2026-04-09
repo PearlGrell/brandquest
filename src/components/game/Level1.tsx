@@ -1,8 +1,21 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Lightbulb, Sparkles } from "lucide-react";
+import { Check, Lightbulb } from "lucide-react";
 import { useHints } from "@/hooks/useHints";
 
+export const HintButton = ({ hintsRemaining, canUseHint, onClick }: { hintsRemaining: number; canUseHint: boolean; onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    disabled={!canUseHint}
+    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${canUseHint
+      ? "glass-panel border-accent/30 text-accent hover:bg-accent/10 hover:scale-105"
+      : "glass-panel border-muted/30 text-muted-foreground opacity-50 cursor-not-allowed"
+      }`}
+  >
+    <Lightbulb className="w-3.5 h-3.5" />
+    Hint ({hintsRemaining})
+  </button>
+);
 
 const BASE_STARS = [
   { id: 0, x: 300, y: 40 },
@@ -15,17 +28,8 @@ const BASE_STARS = [
   { id: 7, x: 280, y: 200 },
 ];
 
-const CORRECT_PATH: [number, number][] = [
-  [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6],
-  [2, 7], [3, 7],
-];
-
-const HINTS = [
-  "Start from the top — connect the first two stars at the top of the 'C'.",
-  "Trace the curve down the left side of the letter.",
-  "The center gear ⚙ connects to stars on the inner curve.",
-  "Complete the bottom of the 'C' and connect the gear to the mid-left star.",
-];
+// Single continuous path for drawing
+const CORRECT_PATH = [0, 1, 2, 3, 4, 5, 6, 7];
 
 function seededRandom(seed: number) {
   let s = seed;
@@ -47,58 +51,149 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
       ...s,
       x: s.x + Math.floor((rng() - 0.5) * 30),
       y: s.y + Math.floor((rng() - 0.5) * 30),
-      label: s.id === 7 ? "⚙" : "✦",
+      label: s.id === 0 ? "START" : s.id === 7 ? "END" : "✦",
     }));
-
 
     const diff = seed % 3 === 0 ? "easy" : seed % 3 === 1 ? "medium" : "hard";
     return [starPositions, diff];
   }, []);
 
-  const [connections, setConnections] = useState<[number, number][]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [shakeId, setShakeId] = useState<number | null>(null);
+  const [activePath, setActivePath] = useState<number[]>([]);
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const [isDrawing, setIsDrawing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shake, setShake] = useState(false);
+
   const [completed, setCompleted] = useState(false);
+  const [wrongCount, setWrongCount] = useState(0);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [showHint, setShowHint] = useState<string | null>(null);
-  const hintIndexRef = useRef(0);
   const { hintsRemaining, canUseHint, submitHint } = useHints();
 
   const handleHint = () => {
     if (!canUseHint) return;
-    const idx = hintIndexRef.current;
-    if (idx >= HINTS.length) return;
     if (submitHint()) {
-      setShowHint(HINTS[idx]);
-      hintIndexRef.current = idx + 1;
+      setShowHint("Click and hold the START star, then drag to connect the stars in order!");
       setTimeout(() => setShowHint(null), 5000);
     }
   };
 
-  const handleStarClick = (id: number) => {
-    if (completed) return;
-    if (selected === null) {
-      setSelected(id);
-    } else if (selected === id) {
-      setSelected(null);
-    } else {
-      const pair: [number, number] = [Math.min(selected, id), Math.max(selected, id)];
-      const isCorrect = CORRECT_PATH.some(([a, b]) => a === pair[0] && b === pair[1]);
-      const alreadyConnected = connections.some(([a, b]) => a === pair[0] && b === pair[1]);
+  const getPos = (e: React.PointerEvent | PointerEvent) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
+    const rect = containerRef.current.getBoundingClientRect();
+    // Normalize to internal 480x420 coordinate system
+    const scaleX = 480 / rect.width;
+    const scaleY = 420 / rect.height;
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
+  };
 
-      if (isCorrect && !alreadyConnected) {
-        const newConns = [...connections, pair];
-        setConnections(newConns);
-        if (newConns.length === CORRECT_PATH.length) {
+  const handlePointerDown = (id: number, e: React.PointerEvent) => {
+    if (completed) return;
+    
+    if (activePath.length === 0) {
+      if (id === 0) {
+        setIsDrawing(true);
+        setActivePath([0]);
+        setCursorPos(getPos(e));
+        // We release pointer capture so pointerenter can fire on other elements while dragging
+        e.target.releasePointerCapture(e.pointerId);
+      } else {
+        triggerError();
+      }
+    } else {
+      // Allow clicking nodes to connect if they didn't drag
+      const expectedNext = CORRECT_PATH[activePath.length];
+      if (id === expectedNext) {
+        const newPath = [...activePath, id];
+        setActivePath(newPath);
+        if (newPath.length === CORRECT_PATH.length) {
+          setIsDrawing(false);
           setCompleted(true);
           setTimeout(onComplete, 2500);
+        } else {
+          setIsDrawing(true);
+          setCursorPos(getPos(e));
+          e.target.releasePointerCapture(e.pointerId);
         }
-      } else if (!isCorrect) {
-        setShakeId(id);
-        setTimeout(() => setShakeId(null), 500);
+      } else if (!activePath.includes(id)) {
+        triggerError();
       }
-      setSelected(null);
     }
   };
+
+  const handlePointerEnter = (id: number) => {
+    if (!isDrawing || completed) return;
+    
+    const lastNode = activePath[activePath.length - 1];
+    const expectedNext = CORRECT_PATH[activePath.length];
+    
+    if (id === expectedNext) {
+      const newPath = [...activePath, id];
+      setActivePath(newPath);
+      
+      if (newPath.length === CORRECT_PATH.length) {
+        setIsDrawing(false);
+        setCompleted(true);
+        setTimeout(onComplete, 2500);
+      }
+    } else if (!activePath.includes(id)) {
+      triggerError();
+    }
+  };
+
+  const triggerError = () => {
+    setShake(true);
+    setTimeout(() => setShake(false), 400);
+    setIsDrawing(false);
+    setActivePath([]);
+    
+    const newWrongCount = wrongCount + 1;
+    setWrongCount(newWrongCount);
+    
+    if (newWrongCount >= 2) {
+      setFeedback("Override Triggered! Revealing Solution...");
+      
+      let step = 1;
+      setActivePath([CORRECT_PATH[0]]);
+      const int = setInterval(() => {
+        if (step < CORRECT_PATH.length) {
+          setActivePath(prev => [...prev, CORRECT_PATH[step]]);
+          step++;
+        } else {
+          clearInterval(int);
+          setCompleted(true);
+          setFeedback("Solution override complete. Access granted.");
+          setTimeout(onComplete, 2500);
+        }
+      }, 400);
+    } else {
+      setFeedback(`Invalid sequence. Attempts left: ${2 - newWrongCount}`);
+      setTimeout(() => setFeedback(null), 2000);
+    }
+  };
+
+  useEffect(() => {
+    const handleMove = (e: PointerEvent) => {
+      if (isDrawing) {
+        setCursorPos(getPos(e));
+      }
+    };
+    
+    const handleUp = () => {
+      // In click-to-connect mode, we don't drop the line on pointerup
+      // We only drop it if they click outside the game area (handled by a separate mechanism if needed)
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [isDrawing, activePath]);
 
   return (
     <div className="flex flex-col items-center">
@@ -107,16 +202,14 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
         <HintButton hintsRemaining={hintsRemaining} canUseHint={canUseHint} onClick={handleHint} />
       </div>
       <p className="text-sm font-mono text-muted-foreground mb-6 flex items-center justify-center gap-2">
-        Connect the stars to reveal the Celestio constellation.
+        Drag from START to connect the stars!
         <span className="text-xs uppercase tracking-widest text-accent">({difficulty})</span>
       </p>
 
       <AnimatePresence>
         {showHint && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
             className="glass-panel px-4 py-2 mb-4 border-accent/40 flex items-center gap-2"
           >
             <Lightbulb className="w-4 h-4 text-accent" />
@@ -125,129 +218,136 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
         )}
       </AnimatePresence>
 
-      <div className="relative bg-muted/5 border border-primary/20 rounded-lg p-6 w-full max-w-[480px]" style={{ aspectRatio: "480/420" }}>
+      <motion.div 
+        ref={containerRef}
+        animate={shake ? { x: [-10, 10, -10, 10, 0] } : {}}
+        transition={{ duration: 0.4 }}
+        className="relative bg-muted/5 border border-primary/20 rounded-lg p-6 w-full max-w-[480px] touch-none shadow-[inset_0_0_50px_rgba(var(--primary),0.05)]" 
+        style={{ aspectRatio: "480/420" }}
+      >
         <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 480 420">
-          {connections.map(([a, b], i) => (
-            <motion.line
-              key={`conn-${i}`}
-              x1={stars[a].x} y1={stars[a].y}
-              x2={stars[b].x} y2={stars[b].y}
-              stroke="hsl(312 100% 63%)" strokeWidth="2.5"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 0.9 }}
-              transition={{ duration: 0.5 }}
-              filter="url(#lineGlow)"
-            />
-          ))}
-          {CORRECT_PATH.filter(
-            ([a, b]) => !connections.some(([ca, cb]) => ca === a && cb === b)
-          ).map(([a, b], i) => (
-            <line
-              key={`guide-${i}`}
-              x1={stars[a].x} y1={stars[a].y}
-              x2={stars[b].x} y2={stars[b].y}
-              stroke="hsl(312 100% 63%)" strokeWidth="0.5" opacity="0.06"
-              strokeDasharray="3 9"
-            />
-          ))}
           <defs>
             <filter id="lineGlow">
-              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feGaussianBlur stdDeviation="3" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
           </defs>
+
+          {/* Guide Path */}
+          {CORRECT_PATH.map((id, i) => {
+            if (i === 0) return null;
+            const prev = stars[CORRECT_PATH[i-1]];
+            const curr = stars[id];
+            return (
+              <line
+                key={`guide-${i}`}
+                x1={prev.x} y1={prev.y} x2={curr.x} y2={curr.y}
+                stroke="hsl(312 100% 63%)" strokeWidth="1" opacity="0.05"
+                strokeDasharray="4 8"
+              />
+            );
+          })}
+
+          {/* Connected Path */}
+          {activePath.map((id, i) => {
+            if (i === 0) return null;
+            const prev = stars[activePath[i-1]];
+            const curr = stars[id];
+            return (
+              <motion.line
+                key={`conn-${i}`}
+                x1={prev.x} y1={prev.y} x2={curr.x} y2={curr.y}
+                stroke="hsl(312 100% 63%)" strokeWidth="4" strokeLinecap="round"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 0.9 }}
+                transition={{ duration: 0.2 }}
+                filter="url(#lineGlow)"
+              />
+            );
+          })}
+
+          {/* Dragging Line */}
+          {isDrawing && activePath.length > 0 && activePath.length < CORRECT_PATH.length && (
+            <>
+              <line
+                x1={stars[activePath[activePath.length - 1]].x} 
+                y1={stars[activePath[activePath.length - 1]].y}
+                x2={cursorPos.x} y2={cursorPos.y}
+                stroke="hsl(312 100% 80%)" strokeWidth="4" strokeLinecap="round"
+                opacity="0.8" filter="url(#lineGlow)"
+              />
+              <circle cx={cursorPos.x} cy={cursorPos.y} r="6" fill="#fff" filter="url(#lineGlow)" className="animate-pulse" />
+            </>
+          )}
         </svg>
 
         {stars.map((star) => {
-          const isGear = star.id === 7;
-          const isConnected = connections.some(([a, b]) => a === star.id || b === star.id);
+          const isStartEnd = star.id === 0 || star.id === 7;
+          const isActive = activePath.includes(star.id);
+          const isLatest = activePath[activePath.length - 1] === star.id;
+          
           return (
-            <motion.button
+            <motion.div
               key={star.id}
-              className={`absolute flex items-center justify-center font-display font-bold transition-all cursor-pointer z-10 ${isGear ? "w-12 h-12 rounded-full text-base" : "w-9 h-9 rounded-full text-xs"
-                } ${selected === star.id
-                  ? "bg-primary text-primary-foreground neon-glow scale-125"
-                  : isConnected
-                    ? "bg-primary/30 text-primary border border-primary/60 neon-glow"
-                    : isGear
-                      ? "bg-secondary/20 text-secondary border border-secondary/40 hover:border-secondary hover:bg-secondary/30"
-                      : "bg-muted/50 text-foreground/80 border border-primary/30 hover:border-primary hover:bg-primary/20"
+              className={`absolute flex items-center justify-center font-display font-bold transition-colors cursor-pointer select-none z-10 
+                ${isStartEnd ? "w-14 h-14 rounded-full text-[10px] tracking-widest" : "w-10 h-10 rounded-full text-sm"} 
+                ${isLatest
+                  ? "bg-primary text-primary-foreground neon-glow scale-110"
+                  : isActive
+                    ? "bg-primary/50 text-white border-2 border-primary/80 neon-glow"
+                    : isStartEnd
+                      ? "bg-secondary/20 text-secondary border-2 border-secondary/40 hover:border-secondary hover:bg-secondary/40"
+                      : "bg-muted/50 text-foreground/80 border border-primary/30 hover:border-primary hover:bg-primary/20 backdrop-blur-sm"
                 }`}
               style={{
-                left: `calc(${(star.x / 480) * 100}% - ${isGear ? 24 : 18}px)`,
-                top: `calc(${(star.y / 420) * 100}% - ${isGear ? 24 : 18}px)`,
+                left: `calc(${(star.x / 480) * 100}% - ${isStartEnd ? 28 : 20}px)`,
+                top: `calc(${(star.y / 420) * 100}% - ${isStartEnd ? 28 : 20}px)`,
               }}
-              onClick={() => handleStarClick(star.id)}
-              animate={shakeId === star.id ? { x: [0, -5, 5, -5, 0] } : {}}
-              whileHover={{ scale: 1.2 }}
-              whileTap={{ scale: 0.9 }}
+              onPointerDown={(e) => handlePointerDown(star.id, e)}
+              onPointerEnter={() => handlePointerEnter(star.id)}
+              whileHover={!isDrawing ? { scale: 1.15 } : {}}
+              whileTap={{ scale: 0.95 }}
             >
-              {star.label}
-            </motion.button>
+              {isActive && !isStartEnd ? <Check className="w-4 h-4 text-white" /> : star.label}
+            </motion.div>
           );
         })}
 
         {completed && (
           <motion.div
-            className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-md rounded-xl"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
+            className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-lg rounded-xl z-20"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
           >
-            <motion.img
-              src="/logo.png"
-              alt="Celestio"
-              className="w-24 h-24 mb-4"
-              initial={{ scale: 0, rotate: -180, opacity: 0 }}
-              animate={{ scale: 1, rotate: 0, opacity: 1 }}
-              transition={{ type: "spring", duration: 1, delay: 0.3 }}
-            />
-            <motion.h3
-              className="font-display text-3xl font-black cosmic-gradient-text neon-text mb-1"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              CELESTIO
-            </motion.h3>
-            <motion.p
-              className="text-sm font-mono text-muted-foreground italic"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.9 }}
-            >
-              Where Technology Dances With Culture
-            </motion.p>
-            <motion.div
-              className="mt-3 flex items-center gap-2 text-primary font-display text-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.2 }}
-            >
-              <Check className="w-4 h-4" /> Constellation Formed!
-            </motion.div>
+             <div>
+                <img src="/logo.png" alt="Celestio" className="w-32 h-32 mb-6 drop-shadow-[0_0_20px_rgba(var(--primary),1)]" />
+             </div>
+             <h3 className="font-display text-4xl font-black cosmic-gradient-text neon-text mb-2">CELESTIO</h3>
+             <p className="text-sm font-mono text-muted-foreground italic mb-4">Connection Re-established</p>
           </motion.div>
         )}
+      </motion.div>
+      <div className="mt-4 text-xs font-mono text-muted-foreground flex gap-2">
+         {CORRECT_PATH.map((id, i) => (
+           <div key={i} className={`w-3 h-3 rounded-full ${activePath.includes(id) ? 'bg-primary neon-glow' : 'bg-muted/30'}`} />
+         ))}
       </div>
-      <div className="mt-3 text-xs font-mono text-muted-foreground">
-        {connections.length}/{CORRECT_PATH.length} connections made
-      </div>
+
+       <div className="h-8 mt-2 flex items-center justify-center">
+          <AnimatePresence>
+            {feedback && (
+              <motion.div
+                className={`text-sm font-mono px-4 py-1.5 rounded-lg border bg-black/50 backdrop-blur-sm ${completed || feedback.includes("Revealing") ? 'text-green-400 border-green-500/30' : 'text-orange-400 border-orange-500/30'}`}
+                initial={{ opacity: 0, y: 10, scale: 0.9 }} 
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+              >
+                {feedback}
+              </motion.div>
+            )}
+          </AnimatePresence>
+       </div>
     </div>
   );
 };
-
-export const HintButton = ({ hintsRemaining, canUseHint, onClick }: { hintsRemaining: number; canUseHint: boolean; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    disabled={!canUseHint}
-    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${canUseHint
-      ? "glass-panel border-accent/30 text-accent hover:bg-accent/10 hover:scale-105"
-      : "glass-panel border-muted/30 text-muted-foreground opacity-50 cursor-not-allowed"
-      }`}
-  >
-    <Lightbulb className="w-3.5 h-3.5" />
-    Hint ({hintsRemaining})
-  </button>
-);
 
 export default Level1;
