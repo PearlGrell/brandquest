@@ -13,8 +13,16 @@ import { Link } from "react-router-dom";
 const GamePage = () => {
   const [level, setLevel] = useState<number | null>(() => {
     const saved = localStorage.getItem("celestio_game_level");
-    return null;
+    return saved ? parseInt(saved) : null;
   });
+
+  useEffect(() => {
+    if (level !== null) {
+      localStorage.setItem("celestio_game_level", level.toString());
+    } else {
+      localStorage.removeItem("celestio_game_level");
+    }
+  }, [level]);
 
   const sessionData = localStorage.getItem("celestio_session");
   const teamId = useMemo(() => {
@@ -39,8 +47,8 @@ const GamePage = () => {
   const handleLevelComplete = async () => {
 
     if (level) {
-      const levelNames = ["Constellation", "Color Calibration", "Debug Code"];
-      const levelName = levelNames[level - 1];
+      const levelLabels = ["Constellation Connect", "Color Calibration", "System Patch"];
+      const levelName = levelLabels[level - 1];
 
       markGameCompleted(teamId, level as 1 | 2 | 3, levelName);
 
@@ -65,8 +73,15 @@ const GamePage = () => {
 
 
       setTimeout(() => {
-        setLevel(null);
         setJustCompletedLevel(null);
+        
+        // Auto-progression logic
+        const nextLevel = [1, 2, 3].find(lvl => lvl !== level && !newCompleted.has(lvl));
+        if (nextLevel) {
+          setLevel(nextLevel);
+        } else {
+          setLevel(null);
+        }
       }, 2000);
     }
   };
@@ -218,14 +233,28 @@ const GamePage = () => {
 
                 {isLoggedIn && (
                   <motion.div
-                    className="text-center"
+                    className="text-center mt-8"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
                   >
-                    <p className="font-mono text-muted-foreground/60 text-sm">
-                      ✨ All challenges unlocked. Play unlimited times!
-                    </p>
+                    {completedGames.size >= 3 ? (
+                      <div className="flex flex-col items-center gap-6">
+                         <p className="font-mono text-secondary tracking-widest uppercase text-xs animate-pulse">
+                          ✨ All core systems recalibrated. Mission ready.
+                        </p>
+                        <Link
+                          to="/dashboard"
+                          className="inline-flex items-center gap-2 px-8 py-3 glass-panel border-secondary/30 text-secondary hover:bg-secondary/10 hover:scale-105 transition-all font-display text-sm font-bold uppercase tracking-widest"
+                        >
+                          Return to Ops Command <ArrowRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    ) : (
+                      <p className="font-mono text-muted-foreground/60 text-sm">
+                        ✨ All challenges unlocked. Complete them all for maximum clearance!
+                      </p>
+                    )}
                   </motion.div>
                 )}
               </motion.div>

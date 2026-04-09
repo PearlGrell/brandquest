@@ -287,9 +287,9 @@ const Dashboard = () => {
               </h3>
               <div className="space-y-4">
                 {[
-                  { id: 1, name: "Constellation", desc: "Connect the stars" },
-                  { id: 2, name: "Brand Builder", desc: "Design constraints" },
-                  { id: 3, name: "Debug Code", desc: "Logic & Syntax" }
+                  { id: 1, name: "Constellation Connect", desc: "Connect the stars" },
+                  { id: 2, name: "Color Calibration", desc: "Calibrate RGB frequencies" },
+                  { id: 3, name: "System Patch", desc: "Route high-frequency cables" }
                 ].map((game) => {
                   const isDone = completedLevels.includes(game.id);
                   const isAvailable = eventStarted;

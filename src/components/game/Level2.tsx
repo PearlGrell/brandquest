@@ -49,12 +49,17 @@ const Level2 = ({ onComplete }: { onComplete: () => void }) => {
     }
   };
 
+  const autoTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleCalibrate = () => {
     if (completed) return;
     
-    const diff = Math.abs(r - target.r) + Math.abs(g - target.g) + Math.abs(b - target.b);
+    const rDiff = Math.abs(r - target.r);
+    const gDiff = Math.abs(g - target.g);
+    const bDiff = Math.abs(b - target.b);
     
-    if (diff < 45) {
+    // allow +-10 for each color channel
+    if (rDiff <= 10 && gDiff <= 10 && bDiff <= 10) {
       setR(target.r);
       setG(target.g);
       setB(target.b);
@@ -65,10 +70,28 @@ const Level2 = ({ onComplete }: { onComplete: () => void }) => {
       const newWrongCount = wrongCount + 1;
       setWrongCount(newWrongCount);
       
-      if (newWrongCount >= 2) {
-        setFeedback("Auto-calibrating override...");
+      if (newWrongCount === 2 && !completed && !autoTimerRef.current) {
+        setFeedback("Hint: Calibrating Red channel...");
         let step = 0;
-        const int = setInterval(() => {
+        const startR = r;
+        autoTimerRef.current = setInterval(() => {
+          step += 15;
+          setR(prev => prev < target.r ? Math.min(prev + 15, target.r) : Math.max(prev - 15, target.r));
+          
+          if (step > 300 || r === target.r) {
+            setR(target.r);
+            if (autoTimerRef.current) {
+               clearInterval(autoTimerRef.current);
+               autoTimerRef.current = null;
+            }
+            setFeedback("Red channel calibrated. Adjust G and B!");
+            setTimeout(() => setFeedback(null), 3000);
+          }
+        }, 50);
+      } else if (newWrongCount >= 4 && !completed && !autoTimerRef.current) {
+        setFeedback("Override Triggered: Calibrating all systems...");
+        let step = 0;
+        autoTimerRef.current = setInterval(() => {
           step += 15;
           setR(prev => prev < target.r ? Math.min(prev + 15, target.r) : Math.max(prev - 15, target.r));
           setG(prev => prev < target.g ? Math.min(prev + 15, target.g) : Math.max(prev - 15, target.g));
@@ -78,18 +101,32 @@ const Level2 = ({ onComplete }: { onComplete: () => void }) => {
             setR(target.r);
             setG(target.g);
             setB(target.b);
-            clearInterval(int);
+            if (autoTimerRef.current) {
+               clearInterval(autoTimerRef.current);
+               autoTimerRef.current = null;
+            }
             setCompleted(true);
             setFeedback("System Override Complete!");
             setTimeout(onComplete, 2500);
           }
         }, 50);
-      } else {
+      } else if (newWrongCount < 2) {
         setFeedback("Mismatch. Adjust frequencies & try again.");
+        setTimeout(() => setFeedback(null), 2000);
+      } else if (newWrongCount === 3) {
+        setFeedback("Still mismatched. Final attempt before override...");
         setTimeout(() => setFeedback(null), 2000);
       }
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (autoTimerRef.current) {
+        clearInterval(autoTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col items-center w-full">

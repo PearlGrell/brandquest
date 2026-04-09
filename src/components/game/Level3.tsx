@@ -53,9 +53,11 @@ const Level3 = ({ onComplete }: { onComplete: () => void }) => {
     if (completed) return;
     // Remove existing connection for this node
     setConnections(prev => prev.filter(c => c.from !== id));
-    e.target.releasePointerCapture(e.pointerId); // Allows pointer events on underlying elements
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId); // Allows pointer events on underlying elements
     setActiveWire({ from: id, color, pos: getPointerPos(e) });
   };
+
+  const autoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleMove = (e: PointerEvent) => {
@@ -80,27 +82,50 @@ const Level3 = ({ onComplete }: { onComplete: () => void }) => {
             // Wrong connection
             const newWrongCount = wrongCount + 1;
             setWrongCount(newWrongCount);
-            if (newWrongCount >= 2) {
+            if (newWrongCount === 2 && !completed && !autoTimerRef.current) {
+              setFeedback("Hint: Patching first port...");
+              setActiveWire(null);
+              let step = 0;
+              // Find the first unconnected or incorrectly connected node
+              const firstInvalidNode = COLORS.find(c => !connections.some(conn => conn.from === c.id && conn.to === c.id));
+              
+              if (firstInvalidNode) {
+                autoTimerRef.current = setInterval(() => {
+                  setConnections(prev => [...prev.filter(p => p.from !== firstInvalidNode.id), { from: firstInvalidNode.id, to: firstInvalidNode.id, color: firstInvalidNode.color }]);
+                  if (autoTimerRef.current) {
+                    clearInterval(autoTimerRef.current);
+                    autoTimerRef.current = null;
+                  }
+                  setFeedback("Port patched. Root the remaining relays!");
+                  setTimeout(() => setFeedback(null), 3000);
+                }, 600);
+              }
+            } else if (newWrongCount >= 4 && !completed && !autoTimerRef.current) {
               // Auto Complete with staggered animation
               setActiveWire(null);
               setFeedback("System Override Initiated. Patching...");
               
               let step = 0;
-              const int = setInterval(() => {
+              autoTimerRef.current = setInterval(() => {
                 const c = COLORS[step];
                 if (c) {
                   setConnections(prev => [...prev.filter(p => p.from !== c.id), { from: c.id, to: c.id, color: c.color }]);
                   step++;
                 } else {
-                  clearInterval(int);
+                  if (autoTimerRef.current) {
+                    clearInterval(autoTimerRef.current);
+                    autoTimerRef.current = null;
+                  }
                   setCompleted(true);
                   setFeedback("Override applied. Ports patched automatically.");
                   setTimeout(onComplete, 2500);
                 }
               }, 400);
-              return;
-            } else {
+            } else if (newWrongCount < 2) {
               setFeedback("Mismatched frequencies detected! Try again.");
+              setTimeout(() => setFeedback(null), 2000);
+            } else if (newWrongCount === 3) {
+              setFeedback("Override required for remaining ports? One last attempt...");
               setTimeout(() => setFeedback(null), 2000);
             }
           }
@@ -114,6 +139,9 @@ const Level3 = ({ onComplete }: { onComplete: () => void }) => {
     return () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
+      if (autoTimerRef.current) {
+        clearInterval(autoTimerRef.current);
+      }
     };
   }, [activeWire, wrongCount, completed]);
 

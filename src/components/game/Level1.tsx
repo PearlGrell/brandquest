@@ -99,7 +99,7 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
         setActivePath([0]);
         setCursorPos(getPos(e));
         // We release pointer capture so pointerenter can fire on other elements while dragging
-        e.target.releasePointerCapture(e.pointerId);
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
       } else {
         triggerError();
       }
@@ -116,7 +116,7 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
         } else {
           setIsDrawing(true);
           setCursorPos(getPos(e));
-          e.target.releasePointerCapture(e.pointerId);
+          (e.target as HTMLElement).releasePointerCapture(e.pointerId);
         }
       } else if (!activePath.includes(id)) {
         triggerError();
@@ -144,6 +144,8 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
     }
   };
 
+  const autoTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const triggerError = () => {
     setShake(true);
     setTimeout(() => setShake(false), 400);
@@ -153,27 +155,63 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
     const newWrongCount = wrongCount + 1;
     setWrongCount(newWrongCount);
     
-    if (newWrongCount >= 2) {
-      setFeedback("Override Triggered! Revealing Solution...");
+    if (newWrongCount === 2 && !completed && !autoTimerRef.current) {
+      setFeedback("Hint: Showing sequence...");
+      
+      // Show the full path briefly, then clear it so they can try
+      let step = 0;
+      autoTimerRef.current = setInterval(() => {
+        if (step < CORRECT_PATH.length) {
+          setActivePath(CORRECT_PATH.slice(0, step + 1));
+          step++;
+        } else {
+          if (autoTimerRef.current) {
+            clearInterval(autoTimerRef.current);
+            autoTimerRef.current = null;
+          }
+          setTimeout(() => {
+            setActivePath([]);
+            setFeedback("Now trace the sequence!");
+            setTimeout(() => setFeedback(null), 2500);
+          }, 500);
+        }
+      }, 300);
+    } else if (newWrongCount >= 4 && !completed && !autoTimerRef.current) {
+      setFeedback("Override Triggered! Revealing Full Solution...");
       
       let step = 1;
       setActivePath([CORRECT_PATH[0]]);
-      const int = setInterval(() => {
+      
+      autoTimerRef.current = setInterval(() => {
         if (step < CORRECT_PATH.length) {
           setActivePath(prev => [...prev, CORRECT_PATH[step]]);
           step++;
         } else {
-          clearInterval(int);
+          if (autoTimerRef.current) {
+            clearInterval(autoTimerRef.current);
+            autoTimerRef.current = null;
+          }
           setCompleted(true);
           setFeedback("Solution override complete. Access granted.");
           setTimeout(onComplete, 2500);
         }
       }, 400);
-    } else {
+    } else if (newWrongCount < 2) {
       setFeedback(`Invalid sequence. Attempts left: ${2 - newWrongCount}`);
+      setTimeout(() => setFeedback(null), 2000);
+    } else if (newWrongCount === 3) {
+      setFeedback(`Final attempt before override...`);
       setTimeout(() => setFeedback(null), 2000);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (autoTimerRef.current) {
+        clearInterval(autoTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleMove = (e: PointerEvent) => {
@@ -236,12 +274,13 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
           {/* Guide Path */}
           {CORRECT_PATH.map((id, i) => {
             if (i === 0) return null;
-            const prev = stars[CORRECT_PATH[i-1]];
-            const curr = stars[id];
+            const p1 = stars[CORRECT_PATH[i-1]];
+            const p2 = stars[id];
+            if (!p1 || !p2) return null;
             return (
               <line
                 key={`guide-${i}`}
-                x1={prev.x} y1={prev.y} x2={curr.x} y2={curr.y}
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                 stroke="hsl(312 100% 63%)" strokeWidth="1" opacity="0.05"
                 strokeDasharray="4 8"
               />
@@ -251,12 +290,13 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
           {/* Connected Path */}
           {activePath.map((id, i) => {
             if (i === 0) return null;
-            const prev = stars[activePath[i-1]];
-            const curr = stars[id];
+            const p1 = stars[activePath[i-1]];
+            const p2 = stars[id];
+            if (!p1 || !p2) return null;
             return (
               <motion.line
                 key={`conn-${i}`}
-                x1={prev.x} y1={prev.y} x2={curr.x} y2={curr.y}
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                 stroke="hsl(312 100% 63%)" strokeWidth="4" strokeLinecap="round"
                 initial={{ pathLength: 0, opacity: 0 }}
                 animate={{ pathLength: 1, opacity: 0.9 }}
@@ -267,7 +307,7 @@ const Level1 = ({ onComplete }: { onComplete: () => void }) => {
           })}
 
           {/* Dragging Line */}
-          {isDrawing && activePath.length > 0 && activePath.length < CORRECT_PATH.length && (
+          {isDrawing && activePath.length > 0 && activePath.length < CORRECT_PATH.length && stars[activePath[activePath.length - 1]] && (
             <>
               <line
                 x1={stars[activePath[activePath.length - 1]].x} 
