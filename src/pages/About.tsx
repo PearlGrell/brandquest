@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import StarField from "@/components/StarField";
 import Navbar from "@/components/Navbar";
-import { Clock, Users, Trophy, Zap, BookOpen, ArrowRight } from "lucide-react";
+import { Clock, Users, Trophy, Zap, BookOpen, ArrowRight, FileText } from "lucide-react";
 
 const About = () => {
   const navigate = useNavigate();
@@ -186,6 +186,22 @@ const About = () => {
                   <p className="font-mono text-sm text-muted-foreground/80">{rule}</p>
                 </motion.div>
               ))}
+
+              <motion.div
+                className="pt-6 mt-6 border-t border-white/5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.4 }}
+              >
+                <a
+                  href="/rulebook.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-mono text-sm text-primary hover:bg-white/10 hover:border-primary/50 transition-all duration-300"
+                >
+                  <FileText className="w-4 h-4" /> View Full Rulebook (PDF)
+                </a>
+              </motion.div>
             </div>
           </motion.div>
 

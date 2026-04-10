@@ -3,8 +3,15 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import StarField from "@/components/StarField";
 import Navbar from "@/components/Navbar";
-import { UserPlus, Trash2, Sparkles, AlertCircle, Copy, Check, Gamepad2, ArrowRight, User } from "lucide-react";
+import { UserPlus, Trash2, Sparkles, AlertCircle, Copy, Check, Gamepad2, ArrowRight, User, ExternalLink } from "lucide-react";
 import { registerTeam, addParticipant, getEventStatus } from "@/lib/apiClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Member {
   name: string;
@@ -59,6 +66,7 @@ const Register = () => {
   const [copied, setCopied] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registrationEnded, setRegistrationEnded] = useState(false);
+  const [showUnstopDialog, setShowUnstopDialog] = useState(true);
 
   const gameComplete = localStorage.getItem("celestio_game_complete") === "true";
   const isLoggedIn = !!localStorage.getItem("celestio_session");
@@ -266,6 +274,36 @@ const Register = () => {
     <div className="relative min-h-screen">
       <StarField />
       <Navbar />
+
+      <Dialog open={showUnstopDialog} onOpenChange={setShowUnstopDialog}>
+        <DialogContent className="glass-panel border-white/10 max-w-md bg-[hsl(260,100%,4%)]/95 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl font-black cosmic-gradient-text">
+              Mandatory Action Required
+            </DialogTitle>
+            <DialogDescription className="font-mono text-muted-foreground/80 pt-4 text-base leading-relaxed">
+              Make sure to register on <span className="text-primary font-bold">Unstop</span> too, as registrations without Unstop will be <span className="text-destructive font-bold uppercase tracking-wider">disqualified</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 mt-6">
+            <a
+              href="https://unstop.com/hackathons/brandquest-celestio-30-indian-institute-of-information-technology-iiit-ranchi-1672195"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-4 cosmic-gradient rounded-xl font-display font-bold text-primary-foreground text-center neon-glow hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+            >
+              Register on Unstop <ExternalLink className="w-4 h-4" />
+            </a>
+            <button
+              onClick={() => setShowUnstopDialog(false)}
+              className="w-full py-3 border border-white/10 rounded-xl font-mono text-xs text-muted-foreground/60 hover:text-white hover:bg-white/5 transition-all text-center tracking-widest uppercase"
+            >
+              Already Registered on Unstop
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="relative z-10 pt-28 pb-16 px-4">
         <div className="container mx-auto max-w-lg">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
