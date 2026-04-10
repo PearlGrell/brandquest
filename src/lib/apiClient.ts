@@ -292,10 +292,8 @@ export async function getLeaderboard() {
   if (error) throw new Error(error.message);
 
   const leaderboard = teams.map(t => {
-    // Get latest activity timestamp for tie-breaking
-    const lastScan = t.scans.length > 0 ? Math.max(...t.scans.map(s => new Date(s.scanned_at).getTime())) : 0;
-    const lastGame = t.games_completed.length > 0 ? Math.max(...t.games_completed.map(g => new Date(g.completed_at).getTime())) : 0;
-    const lastActivity = Math.max(lastScan, lastGame);
+    // Get latest scan timestamp for tie-breaking
+    const lastActivity = t.scans.length > 0 ? Math.max(...t.scans.map(s => new Date(s.scanned_at).getTime())) : 0;
 
     return {
       id: t.id,
@@ -308,9 +306,7 @@ export async function getLeaderboard() {
   }).sort((a, b) => {
     // 1. More scans first
     if (b.scanCount !== a.scanCount) return b.scanCount - a.scanCount;
-    // 2. More games first
-    if (b.gamesCount !== a.gamesCount) return b.gamesCount - a.gamesCount;
-    // 3. Earlier completion time first (if activity exists)
+    // 2. Earlier completion time first (if activity exists)
     if (a.lastActivity > 0 && b.lastActivity > 0) return a.lastActivity - b.lastActivity;
     return 0;
   });

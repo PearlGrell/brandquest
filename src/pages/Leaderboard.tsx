@@ -196,7 +196,6 @@ const Leaderboard = () => {
                       </div>
                       <div className="text-right">
                         <div className="font-mono text-sm font-semibold text-foreground/80">{team.scanCount}/5</div>
-                        <div className="text-[10px] font-mono text-muted-foreground/30">{team.gamesCount} games</div>
                       </div>
                     </motion.div>
                   );

@@ -83,7 +83,7 @@ const Admin = () => {
       setRegEnded(map.get("registrationEnded") === "true");
       setDeadline((map.get("registrationDeadline") || "") as string);
       setCurrentRound(parseInt((map.get("currentRound") as string) || "1"));
-      
+
       setR2Open(map.get("r2_open") === "true");
       setR2Deadline((map.get("r2_deadline") || "") as string);
       setR3Open(map.get("r3_open") === "true");
@@ -169,20 +169,20 @@ const Admin = () => {
   };
 
   const downloadExcel = (htmlData: string, filename: string) => {
-      const blob = new Blob([htmlData], { type: "application/vnd.ms-excel" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${filename}_${new Date().toLocaleDateString()}.xls`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    const blob = new Blob([htmlData], { type: "application/vnd.ms-excel" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}_${new Date().toLocaleDateString()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleExportAllocations = async () => {
     try {
       const data = await adminExportData(ADMIN_PASSWORD);
-      
+
       let maxMembers = 0;
       data.teams.forEach((t: any) => {
         if (t.participants.length > maxMembers) maxMembers = t.participants.length;
@@ -197,15 +197,15 @@ const Admin = () => {
       data.teams.forEach((t: any) => {
         const source = t.isAdminCreated ? "Admin" : "Participant";
         const color = t.isAdminCreated ? "background-color: #e0e7ff; color: #3730a3;" : "";
-        
+
         html += `<tr style="${color}"><td>${t.id}</td><td>${t.name}</td><td>${source}</td>`;
-        
-        for(let i = 0; i < maxMembers; i++) {
+
+        for (let i = 0; i < maxMembers; i++) {
           if (i < t.participants.length) {
-             const p = t.participants[i];
-             html += `<td>${p.name || ""}</td><td>${p.roll_number || ""}</td><td>${p.email || ""}</td>`;
+            const p = t.participants[i];
+            html += `<td>${p.name || ""}</td><td>${p.roll_number || ""}</td><td>${p.email || ""}</td>`;
           } else {
-             html += `<td></td><td></td><td></td>`;
+            html += `<td></td><td></td><td></td>`;
           }
         }
         html += `</tr>`;
@@ -222,11 +222,11 @@ const Admin = () => {
     try {
       const { leaderboard } = await getLeaderboard();
       const cutoff = Math.ceil(leaderboard.length / 2);
-      let html = `<table border="1"><tr><th>Rank</th><th>Team ID</th><th>Team Name</th><th>Scans</th><th>Games Completed</th></tr>`;
+      let html = `<table border="1"><tr><th>Rank</th><th>Team ID</th><th>Team Name</th><th>Scans</th></tr>`;
       leaderboard.forEach((t, index) => {
         const isTop = index < cutoff;
         const color = isTop ? "background-color: #d4edda; color: #155724;" : "";
-        html += `<tr style="${color}"><td>${index + 1}</td><td>${t.id}</td><td>${t.name}</td><td>${t.scanCount}</td><td>${t.gamesCount}</td></tr>`;
+        html += `<tr style="${color}"><td>${index + 1}</td><td>${t.id}</td><td>${t.name}</td><td>${t.scanCount}</td></tr>`;
       });
       html += `</table>`;
       downloadExcel(html, "Round1_Leaderboard");
@@ -609,8 +609,8 @@ const Admin = () => {
                     </div>
                   </div>
                   <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                    {soloists.filter(s => 
-                      s.name.toLowerCase().includes(soloSearch.toLowerCase()) || 
+                    {soloists.filter(s =>
+                      s.name.toLowerCase().includes(soloSearch.toLowerCase()) ||
                       s.roll_number.toLowerCase().includes(soloSearch.toLowerCase())
                     ).map(s => (
                       <button
@@ -654,7 +654,7 @@ const Admin = () => {
                     </div>
                   </div>
                   <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                    {teams.filter(t => 
+                    {teams.filter(t =>
                       t.name.toLowerCase().includes(teamSearch.toLowerCase())
                     ).map(t => (
                       <div
@@ -777,114 +777,114 @@ const Admin = () => {
 export default Admin;
 
 const BrandsManager = () => {
-    const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [newBrand, setNewBrand] = useState("");
-    const [adding, setAdding] = useState(false);
-    const { toast } = useToast();
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newBrand, setNewBrand] = useState("");
+  const [adding, setAdding] = useState(false);
+  const { toast } = useToast();
 
-    useEffect(() => {
-        const loadBrands = async () => {
-            try {
-                const { getBrands } = await import("@/lib/apiClient");
-                const data = await getBrands();
-                setBrands(data || []);
-            } catch (err) {
-                console.error("Failed to load brands:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadBrands();
-    }, []);
-
-    const handleAdd = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newBrand) return;
-        try {
-            setAdding(true);
-            const { addBrand } = await import("@/lib/apiClient");
-            const brand = await addBrand(newBrand);
-            setBrands([...brands, brand]);
-            setNewBrand("");
-            toast({ title: "Brand Added" });
-        } catch (err) {
-            toast({ title: "Failed to add brand", description: err.message, variant: "destructive" });
-        } finally {
-            setAdding(false);
-        }
+  useEffect(() => {
+    const loadBrands = async () => {
+      try {
+        const { getBrands } = await import("@/lib/apiClient");
+        const data = await getBrands();
+        setBrands(data || []);
+      } catch (err) {
+        console.error("Failed to load brands:", err);
+      } finally {
+        setLoading(false);
+      }
     };
+    loadBrands();
+  }, []);
 
-    const handleDelete = async (id: number) => {
-        try {
-            const { deleteBrand } = await import("@/lib/apiClient");
-            await deleteBrand(id);
-            setBrands(brands.filter(b => b.id !== id));
-            toast({ title: "Brand Removed" });
-        } catch (err) {
-            toast({ title: "Failed to remove brand", variant: "destructive" });
-        }
-    };
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrand) return;
+    try {
+      setAdding(true);
+      const { addBrand } = await import("@/lib/apiClient");
+      const brand = await addBrand(newBrand);
+      setBrands([...brands, brand]);
+      setNewBrand("");
+      toast({ title: "Brand Added" });
+    } catch (err) {
+      toast({ title: "Failed to add brand", description: err.message, variant: "destructive" });
+    } finally {
+      setAdding(false);
+    }
+  };
 
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="glass-panel p-6 border-white/5 lg:col-span-1 h-fit">
-                <h3 className="font-display text-lg font-bold mb-6">Register Brand</h3>
-                <form onSubmit={handleAdd} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">New Brand Identity</label>
-                      <input
-                          type="text"
-                          placeholder="e.g., Apple, Tesla, SpaceX"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-accent/50 outline-none"
-                          value={newBrand}
-                          onChange={(e) => setNewBrand(e.target.value)}
-                      />
-                    </div>
-                    <button
-                        type="submit"
-                        disabled={adding || !newBrand}
-                        className="w-full py-4 bg-accent text-accent-foreground rounded-xl font-display font-black text-xs tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                    >
-                        {adding ? "INITIALIZING..." : "ADD TO POOL"}
-                    </button>
-                </form>
-            </div>
+  const handleDelete = async (id: number) => {
+    try {
+      const { deleteBrand } = await import("@/lib/apiClient");
+      await deleteBrand(id);
+      setBrands(brands.filter(b => b.id !== id));
+      toast({ title: "Brand Removed" });
+    } catch (err) {
+      toast({ title: "Failed to remove brand", variant: "destructive" });
+    }
+  };
 
-            <div className="lg:col-span-2 space-y-4">
-                <div className="flex items-center justify-between px-2">
-                    <h3 className="font-display text-lg font-bold">Allocated Brand Pool</h3>
-                    <span className="text-[10px] font-mono bg-accent/10 text-accent px-2 py-0.5 rounded-full">{brands.length} Identifiers</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {loading ? (
-                        <div className="col-span-full py-20 text-center glass-panel border-white/5">
-                            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-accent/50" />
-                            <p className="font-mono text-xs text-muted-foreground/30 uppercase tracking-widest">Scanning records...</p>
-                        </div>
-                    ) : brands.map(b => (
-                        <div key={b.id} className="glass-panel p-4 flex items-center justify-between border-white/5 group hover:border-accent/30 transition-all">
-                            <div className="flex flex-col">
-                              <span className="font-display font-bold text-sm tracking-tight">{b.name}</span>
-                              <span className="text-[9px] font-mono text-muted-foreground/30">ID: {b.id.toString().padStart(4, '0')}</span>
-                            </div>
-                            <button
-                                onClick={() => handleDelete(b.id)}
-                                className="p-2 text-destructive/40 hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-                                title="Remove Brand"
-                            >
-                              <Plus className="w-4 h-4 rotate-45" />
-                            </button>
-                        </div>
-                    ))}
-                    {!loading && brands.length === 0 && (
-                        <div className="col-span-full py-20 text-center glass-panel border-white/5 opacity-30">
-                            <AlertCircle className="w-8 h-8 mx-auto mb-4" />
-                            <p className="font-mono text-xs uppercase tracking-widest">Pool is empty</p>
-                        </div>
-                    )}
-                </div>
-            </div>
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="glass-panel p-6 border-white/5 lg:col-span-1 h-fit">
+        <h3 className="font-display text-lg font-bold mb-6">Register Brand</h3>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">New Brand Identity</label>
+            <input
+              type="text"
+              placeholder="e.g., Apple, Tesla, SpaceX"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-accent/50 outline-none"
+              value={newBrand}
+              onChange={(e) => setNewBrand(e.target.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={adding || !newBrand}
+            className="w-full py-4 bg-accent text-accent-foreground rounded-xl font-display font-black text-xs tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            {adding ? "INITIALIZING..." : "ADD TO POOL"}
+          </button>
+        </form>
+      </div>
+
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <h3 className="font-display text-lg font-bold">Allocated Brand Pool</h3>
+          <span className="text-[10px] font-mono bg-accent/10 text-accent px-2 py-0.5 rounded-full">{brands.length} Identifiers</span>
         </div>
-    );
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {loading ? (
+            <div className="col-span-full py-20 text-center glass-panel border-white/5">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-accent/50" />
+              <p className="font-mono text-xs text-muted-foreground/30 uppercase tracking-widest">Scanning records...</p>
+            </div>
+          ) : brands.map(b => (
+            <div key={b.id} className="glass-panel p-4 flex items-center justify-between border-white/5 group hover:border-accent/30 transition-all">
+              <div className="flex flex-col">
+                <span className="font-display font-bold text-sm tracking-tight">{b.name}</span>
+                <span className="text-[9px] font-mono text-muted-foreground/30">ID: {b.id.toString().padStart(4, '0')}</span>
+              </div>
+              <button
+                onClick={() => handleDelete(b.id)}
+                className="p-2 text-destructive/40 hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                title="Remove Brand"
+              >
+                <Plus className="w-4 h-4 rotate-45" />
+              </button>
+            </div>
+          ))}
+          {!loading && brands.length === 0 && (
+            <div className="col-span-full py-20 text-center glass-panel border-white/5 opacity-30">
+              <AlertCircle className="w-8 h-8 mx-auto mb-4" />
+              <p className="font-mono text-xs uppercase tracking-widest">Pool is empty</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
