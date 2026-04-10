@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Trophy, Gamepad2, QrCode, AlertCircle, BookOpen } from "lucide-react";
+import { LogOut, Trophy, Gamepad2, QrCode, AlertCircle, BookOpen, Menu } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { getEventStatus } from "@/lib/apiClient";
 
 const Navbar = () => {
@@ -144,6 +145,93 @@ const Navbar = () => {
               Login
             </Link>
           )}
+
+          {/* Mobile Menu */}
+          <div className="flex sm:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <button className="p-2 text-muted-foreground hover:text-primary transition-all duration-300">
+                  <Menu className="w-6 h-6" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="right" className="glass-panel-strong border-l border-white/10 w-[280px] p-0 overflow-hidden">
+                <div className="flex flex-col h-full bg-deep-space/95 backdrop-blur-2xl">
+                  <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                    <Link to="/" className="flex items-center gap-2">
+                      <img src="/celestio.png" alt="Celestio" className="h-10 w-auto object-contain" />
+                    </Link>
+                  </div>
+
+                  <nav className="flex-1 px-4 py-8 space-y-4">
+                    {isLoggedIn && (
+                      <>
+                        <Link
+                          to="/game"
+                          className={`flex items-center gap-4 px-4 py-3 rounded-xl text-lg font-mono font-medium transition-all duration-300 ${location.pathname === "/game" ? "text-primary bg-primary/10 border-r-2 border-primary" : "text-muted-foreground hover:bg-white/5"
+                            }`}
+                        >
+                          <Gamepad2 className="w-5 h-5" />
+                          Play
+                        </Link>
+                        <Link
+                          to="/rounds"
+                          className={`flex items-center gap-4 px-4 py-3 rounded-xl text-lg font-mono font-medium transition-all duration-300 ${location.pathname === "/rounds" ? "text-primary bg-primary/10 border-r-2 border-primary" : "text-muted-foreground hover:bg-white/5"
+                            }`}
+                        >
+                          <QrCode className="w-5 h-5" />
+                          Rounds
+                        </Link>
+                        <Link
+                          to="/leaderboard"
+                          className={`flex items-center gap-4 px-4 py-3 rounded-xl text-lg font-mono font-medium transition-all duration-300 ${location.pathname === "/leaderboard" ? "text-primary bg-primary/10 border-r-2 border-primary" : "text-muted-foreground hover:bg-white/5"
+                            }`}
+                        >
+                          <Trophy className="w-5 h-5" />
+                          Leaderboard
+                        </Link>
+                      </>
+                    )}
+                    <Link
+                      to="/about"
+                      className={`flex items-center gap-4 px-4 py-3 rounded-xl text-lg font-mono font-medium transition-all duration-300 ${location.pathname === "/about" ? "text-secondary bg-secondary/10 border-r-2 border-secondary" : "text-muted-foreground hover:bg-white/5"
+                        }`}
+                    >
+                      <BookOpen className="w-5 h-5" />
+                      About
+                    </Link>
+                  </nav>
+
+                  <div className="p-6 mt-auto border-t border-white/5 space-y-4">
+                    {isLoggedIn ? (
+                      <>
+                        <Link
+                          to="/dashboard"
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl glass-panel text-accent"
+                        >
+                          <div className="w-2 h-2 rounded-full bg-accent animate-pulse-glow" />
+                          <span className="font-mono truncate">{teamName}</span>
+                        </Link>
+                        <button
+                          onClick={logout}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all font-mono"
+                        >
+                          <LogOut className="w-5 h-5" />
+                          Logout
+                        </button>
+                      </>
+                    ) : (
+                      <Link
+                        to="/login"
+                        className="flex items-center justify-center py-4 rounded-xl font-mono text-lg font-bold cosmic-gradient text-primary-foreground neon-glow"
+                      >
+                        Login
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </motion.nav>
