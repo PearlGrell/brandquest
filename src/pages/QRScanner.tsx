@@ -554,59 +554,7 @@ const QRScanner = () => {
                   </motion.div>
                 )}
               </motion.div>
-
-              {/* DEBUG TOOLS (PC TESTING) */}
-              <div className="mt-4">
-                <details className="group">
-                  <summary className="list-none cursor-pointer text-[10px] font-mono text-primary/30 hover:text-primary transition-colors text-center uppercase tracking-widest outline-none">
-                    [ Open Debug Terminal ]
-                  </summary>
-                  <div className="mt-4 p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
-                    <p className="text-[10px] font-mono text-muted-foreground/40 mb-3 uppercase tracking-tighter text-left">Internal Scan Override</p>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        placeholder="Paste Admin URL or Stage ID..." 
-                        id="debug-scan-input"
-                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:border-primary/50 outline-none"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const val = (e.target as HTMLInputElement).value;
-                            handleQRDetected({ data: val } as any);
-                            (e.target as HTMLInputElement).value = "";
-                          }
-                        }}
-                      />
-                      <button 
-                        onClick={() => {
-                          const input = document.getElementById('debug-scan-input') as HTMLInputElement;
-                          if (input.value) {
-                            handleQRDetected({ data: input.value } as any);
-                            input.value = "";
-                          }
-                        }}
-                        className="px-4 bg-primary text-primary-foreground rounded-lg font-display font-bold text-[10px]"
-                      >
-                        EXEC
-                      </button>
-                    </div>
-                  </div>
-                </details>
-              </div>
             </div>
-          )}
-
-          {/* Reset button */}
-          {scans.length > 0 && (
-            <motion.button
-              onClick={resetScans}
-              className="w-full mt-10 py-3 rounded-lg border border-border/30 font-mono text-sm text-muted-foreground hover:bg-muted/10 transition-all"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              Reset All Scans
-            </motion.button>
           )}
 
           {/* Info */}
