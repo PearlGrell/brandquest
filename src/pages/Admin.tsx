@@ -699,14 +699,14 @@ const Admin = () => {
                         <MapPin className="w-12 h-12 text-primary" />
                       </div>
 
-                      <div className="flex items-start gap-6 mb-6">
-                        <div className="p-3 bg-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                          <QRCodeSVG value={qrValue} size={100} level="H" id={`qr-stage-${num}`} />
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-6">
+                        <div className="p-4 bg-white rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.15)] flex-shrink-0">
+                          <QRCodeSVG value={qrValue} size={140} level="H" id={`qr-stage-${num}`} includeMargin={true} />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 text-center sm:text-left pt-2">
                           <h3 className="font-display text-lg font-bold mb-1">{isStart ? "Starting Point" : `Stage ${num}`}</h3>
                           <p className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-widest">QR Verification Point</p>
-                          <div className="mt-4 flex gap-2">
+                          <div className="mt-4 flex flex-wrap justify-center sm:justify-start gap-2">
                             <div className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-mono text-muted-foreground flex items-center gap-1.5">
                               <Eye className="w-3 h-3" /> {qrValue.replace(window.location.origin, '')}
                             </div>

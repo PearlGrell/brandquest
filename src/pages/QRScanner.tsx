@@ -501,25 +501,28 @@ const QRScanner = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="relative">
+                  <div className="relative aspect-square md:aspect-video overflow-hidden">
                     {/* Video Stream */}
                     <video
                       ref={videoRef}
-                      className="w-full aspect-video bg-black"
+                      className="w-full h-full object-cover bg-black"
                       playsInline
                     />
 
                     {/* Scanning Overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-64 h-64 border-4 border-primary rounded-lg bg-transparent animate-pulse"></div>
-                      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/10 to-transparent"></div>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-6">
+                      <div className="w-[75%] max-w-[280px] aspect-square border-4 border-primary rounded-3xl bg-transparent animate-pulse relative">
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-[10px] font-mono text-primary/60 uppercase tracking-widest whitespace-nowrap">
+                          Align QR Code Within Frame
+                        </div>
+                      </div>
                     </div>
 
                     {/* Scanner Status */}
-                    <div className="absolute top-4 left-4 right-4 bg-black/60 backdrop-blur-sm p-4 rounded-lg">
-                      <div className="flex items-center gap-2 text-primary font-mono text-sm">
-                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-                        {isScanning ? "Initializing camera..." : "Scanning..."}
+                    <div className="absolute top-4 left-4 right-4 bg-black/60 backdrop-blur-sm p-3 rounded-xl border border-white/10">
+                      <div className="flex items-center gap-2 text-primary font-mono text-[10px] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                        {isScanning ? "Initializing Camera..." : "Scanner Active"}
                       </div>
                     </div>
 
