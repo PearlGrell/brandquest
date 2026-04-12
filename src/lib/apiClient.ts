@@ -212,6 +212,26 @@ export async function addParticipant(teamId: string, name: string, email: string
   return data;
 }
 
+export async function adminAddParticipant(name: string, email: string, rollNumber: string, year: string, adminPassword: string) {
+  if (adminPassword !== "CELESTIO26BRANDQUEST") throw new Error("Unauthorized");
+
+  const { data, error } = await supabase
+    .from("participants")
+    .insert({
+      name,
+      email,
+      roll_number: rollNumber.toUpperCase(),
+      year,
+      password: "Celestio26",
+      team_id: null
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ==================== Event Control ====================
 
 function parseRegistrationDeadline(deadlineRaw: string): Date | null {

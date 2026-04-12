@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import StarField from "@/components/StarField";
 import Navbar from "@/components/Navbar";
 import { Shield, Users, UserPlus, Search, Loader2, AlertCircle, Check, ArrowRight, Download, Plus, Zap, Timer, Power, RefreshCw, Radio, MapPin, List, Settings, Eye } from "lucide-react";
-import { getAdminData, adminSeedSoloist, adminCreateTeam, adminExportData, getEventConfig, updateEventConfig, getEventCounters, getLeaderboard, adminGetSubmissions } from "@/lib/apiClient";
+import { getAdminData, adminSeedSoloist, adminCreateTeam, adminAddParticipant, adminExportData, getEventConfig, updateEventConfig, getEventCounters, getLeaderboard, adminGetSubmissions } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QRCodeSVG } from "qrcode.react";
@@ -63,6 +63,12 @@ const Admin = () => {
   const [creating, setCreating] = useState(false);
   const [soloSearch, setSoloSearch] = useState("");
   const [teamSearch, setTeamSearch] = useState("");
+  
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberRoll, setNewMemberRoll] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberYear, setNewMemberYear] = useState("");
+  const [isAddingMember, setIsAddingMember] = useState(false);
 
   const isAuth = password === ADMIN_PASSWORD;
 
@@ -165,6 +171,28 @@ const Admin = () => {
       toast({ title: "Creation Failed", description: err.message, variant: "destructive" });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMemberName || !newMemberRoll || !newMemberEmail || !newMemberYear) {
+      toast({ title: "Validation Error", description: "All fields are required", variant: "destructive" });
+      return;
+    }
+    try {
+      setIsAddingMember(true);
+      await adminAddParticipant(newMemberName, newMemberEmail, newMemberRoll, newMemberYear, ADMIN_PASSWORD);
+      setNewMemberName("");
+      setNewMemberRoll("");
+      setNewMemberEmail("");
+      setNewMemberYear("");
+      toast({ title: "Member Added", description: `Default password to Celestio26 for ${newMemberRoll}` });
+      loadData();
+    } catch (err) {
+      toast({ title: "Addition Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsAddingMember(false);
     }
   };
 
@@ -553,40 +581,105 @@ const Admin = () => {
             {/* PARTICIPANTS TAB */}
             <TabsContent value="teams">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Create Team Form */}
-                <div className="glass-panel p-6 border-white/5 lg:col-span-1 h-fit sticky top-28">
-                  <h3 className="font-display text-lg font-bold mb-6 flex items-center gap-2">
-                    <Plus className="w-5 h-5 text-primary" /> Create Placeholder Team
-                  </h3>
-                  <form onSubmit={handleCreateTeam} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Team Identity</label>
-                      <input
-                        type="text"
-                        placeholder="Team Name"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-primary/50 outline-none transition-all"
-                        value={newTeamName}
-                        onChange={(e) => setNewTeamName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Security Key</label>
-                      <input
-                        type="password"
-                        placeholder="Team Password"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-primary/50 outline-none transition-all"
-                        value={newTeamPass}
-                        onChange={(e) => setNewTeamPass(e.target.value)}
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={creating || !newTeamName || !newTeamPass}
-                      className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-display font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale"
-                    >
-                      {creating ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Initiate Team"}
-                    </button>
-                  </form>
+                <div className="lg:col-span-1 space-y-6 h-fit sticky top-28">
+                  {/* Create Team Form */}
+                  <div className="glass-panel p-6 border-white/5">
+                    <h3 className="font-display text-lg font-bold mb-6 flex items-center gap-2">
+                      <Plus className="w-5 h-5 text-primary" /> Create Placeholder Team
+                    </h3>
+                    <form onSubmit={handleCreateTeam} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Team Identity</label>
+                        <input
+                          type="text"
+                          placeholder="Team Name"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-primary/50 outline-none transition-all"
+                          value={newTeamName}
+                          onChange={(e) => setNewTeamName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Security Key</label>
+                        <input
+                          type="password"
+                          placeholder="Team Password"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-primary/50 outline-none transition-all"
+                          value={newTeamPass}
+                          onChange={(e) => setNewTeamPass(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={creating || !newTeamName || !newTeamPass}
+                        className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-display font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale"
+                      >
+                        {creating ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Initiate Team"}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Add Individual Member Form */}
+                  <div className="glass-panel p-6 border-white/5">
+                    <h3 className="font-display text-lg font-bold mb-6 flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-secondary" /> Add Individual Member
+                    </h3>
+                    <form onSubmit={handleAddMember} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Full Name</label>
+                        <input
+                          type="text"
+                          placeholder="John Doe"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-secondary/50 outline-none transition-all"
+                          value={newMemberName}
+                          onChange={(e) => setNewMemberName(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Roll Number</label>
+                          <input
+                            type="text"
+                            placeholder="22CS10XXX"
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-secondary/50 outline-none transition-all"
+                            value={newMemberRoll}
+                            onChange={(e) => setNewMemberRoll(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Year</label>
+                          <input
+                            type="text"
+                            placeholder="1st, 2nd..."
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-secondary/50 outline-none transition-all"
+                            value={newMemberYear}
+                            onChange={(e) => setNewMemberYear(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">Email Address</label>
+                        <input
+                          type="email"
+                          placeholder="john@example.com"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-secondary/50 outline-none transition-all"
+                          value={newMemberEmail}
+                          onChange={(e) => setNewMemberEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="p-3 bg-secondary/5 border border-secondary/10 rounded-xl mb-2">
+                        <p className="text-[10px] font-mono text-secondary/60 text-center">
+                          Default Password: <span className="font-bold">Celestio26</span>
+                        </p>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isAddingMember || !newMemberName || !newMemberRoll || !newMemberEmail || !newMemberYear}
+                        className="w-full py-3 bg-secondary text-secondary-foreground rounded-xl font-display font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale"
+                      >
+                        {isAddingMember ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Deploy Member"}
+                      </button>
+                    </form>
+                  </div>
                 </div>
 
                 {/* Soloists Column */}
@@ -829,7 +922,12 @@ const BrandsManager = () => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="glass-panel p-6 border-white/5 lg:col-span-1 h-fit">
-        <h3 className="font-display text-lg font-bold mb-6">Register Brand</h3>
+        <div className="flex items-center gap-2 mb-4 p-3 bg-primary/10 border border-primary/20 rounded-xl">
+          <Zap className="w-4 h-4 text-primary" />
+          <p className="text-[10px] font-mono text-primary font-bold uppercase tracking-widest">Universal Mode Active</p>
+        </div>
+        <h3 className="font-display text-lg font-bold mb-2">Register Brand</h3>
+        <p className="text-[10px] font-mono text-muted-foreground/50 mb-6 uppercase tracking-tight">Backend is currently locked to <span className="text-primary font-bold">ZENITH</span>.</p>
         <form onSubmit={handleAdd} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[10px] font-mono text-muted-foreground/50 uppercase ml-1">New Brand Identity</label>
